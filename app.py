@@ -619,9 +619,11 @@ with col2:
     ax.text(0, -2.0, f"NEAR: {target_player}", color='#38bdf8', fontsize=12, fontweight='bold', ha='center')
     ax.text(0, 25.2, "FAR: OPPONENT", color='#fb923c', fontsize=12, fontweight='bold', ha='center')
 
-    ax.set_xlim(-6.5, 6.5)
-    ax.set_ylim(-3.5, 27)
-    ax.set_aspect('equal')
+    # コート全体の表示枠を完全に固定（どんなショットでも一定の大きさ・位置で固定）
+    ax.set_xlim(-6.8, 6.8)
+    ax.set_ylim(-3.5, 27.2)
+    ax.set_aspect('equal', adjustable='box')
     ax.axis('off')
     
-    st.pyplot(fig)
+    # 枠を固定して中央寄せで表示
+    st.pyplot(fig, use_container_width=False)
