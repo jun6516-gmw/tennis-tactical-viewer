@@ -227,53 +227,59 @@ shot_features_df = extract_shot_features(shots_df)
 full_meta_df = pd.merge(points_summary_df, shot_features_df, on='Point', how='left')
 
 # ----------------------------------------------------
-# フィルタ変更時のリセットコールバック
+# セッション状態の初期化とコールバック
 # ----------------------------------------------------
-def reset_point_index():
+for k in ["f_point", "f_finish", "f_serve", "f_gs_type", "f_gs_course", "f_vol_type", "f_vol_course", "f_smash"]:
+    if k not in st.session_state:
+        st.session_state[k] = "すべて"
+
+if "current_point_idx" not in st.session_state:
     st.session_state.current_point_idx = 0
 
+def on_filter_change():
+    st.session_state.current_point_idx = 0
+    st.rerun()
+
 # ----------------------------------------------------
-# サイドバー: 段階連動型（カスケード）フィルタUI
+# サイドバー: 段階連動型フィルタUI
 # ----------------------------------------------------
 st.sidebar.header("🔍 フィルタ設定")
 
-# 1. ポイント（全体）
+# 1. ポイント
 c_all = len(full_meta_df)
 c_won = len(full_meta_df[full_meta_df['Point_Outcome'] == '取った'])
 c_lost = len(full_meta_df[full_meta_df['Point_Outcome'] == '落とした'])
 
-opt_point_list = ["すべて", "取った", "落とした"]
-def format_point(opt):
-    if opt == "すべて": return f"すべて ({c_all})"
-    if opt == "取った": return f"取った ({c_won})"
-    if opt == "落とした": return f"落とした ({c_lost})"
-    return opt
+sel_point = st.sidebar.selectbox(
+    "■ ポイント",
+    ["すべて", "取った", "落とした"],
+    format_func=lambda x: f"すべて ({c_all})" if x == "すべて" else (f"取った ({c_won})" if x == "取った" else f"落とした ({c_lost})"),
+    key="f_point",
+    on_change=on_filter_change
+)
 
-sel_point = st.sidebar.selectbox("■ ポイント", opt_point_list, format_func=format_point, key="f_point", on_change=reset_point_index)
-
-# 第1段階 (df_stage1)
+# 第1段階の母集団
 if sel_point == "すべて":
     df_stage1 = full_meta_df
 else:
     df_stage1 = full_meta_df[full_meta_df['Point_Outcome'] == sel_point]
 
-# 2. 決まり方（ポイント選択に連動）
 cnt_s1 = len(df_stage1)
+
+# 2. 決まり方（ポイント選択に連動）
 c_ace = len(df_stage1[df_stage1['Finish_Type'] == 'エース'])
 c_out = len(df_stage1[df_stage1['Finish_Type'] == 'アウト'])
 c_net = len(df_stage1[df_stage1['Finish_Type'] == 'ネット'])
 
-opt_finish_list = ["すべて", "エース", "アウト", "ネット"]
-def format_finish(opt):
-    if opt == "すべて": return f"すべて ({cnt_s1})"
-    if opt == "エース": return f"エース ({c_ace})"
-    if opt == "アウト": return f"アウト ({c_out})"
-    if opt == "ネット": return f"ネット ({c_net})"
-    return opt
+sel_finish = st.sidebar.selectbox(
+    "■ 決まり方",
+    ["すべて", "エース", "アウト", "ネット"],
+    format_func=lambda x: f"すべて ({cnt_s1})" if x == "すべて" else (f"エース ({c_ace})" if x == "エース" else (f"アウト ({c_out})" if x == "アウト" else f"ネット ({c_net})")),
+    key="f_finish",
+    on_change=on_filter_change
+)
 
-sel_finish = st.sidebar.selectbox("■ 決まり方", opt_finish_list, format_func=format_finish, key="f_finish", on_change=reset_point_index)
-
-# 第2段階 (df_stage2: ポイント + 決まり方)
+# 第2段階の母集団
 if sel_finish == "すべて":
     df_stage2 = df_stage1
 else:
@@ -284,20 +290,19 @@ cnt_s2 = len(df_stage2)
 st.sidebar.markdown("---")
 st.sidebar.markdown("##### 🎾 ショットフィルタ")
 
-# 3. サービス（ポイント＋決まり方に連動）
+# 3. サービス
 c_srv_cen = len(df_stage2[df_stage2['has_serve_center'] == True])
 c_srv_wde = len(df_stage2[df_stage2['has_serve_wide'] == True])
 
-opt_srv_list = ["すべて", "センター", "ワイド"]
-def format_srv(opt):
-    if opt == "すべて": return f"すべて ({cnt_s2})"
-    if opt == "センター": return f"センター ({c_srv_cen})"
-    if opt == "ワイド": return f"ワイド ({c_srv_wde})"
-    return opt
+sel_serve = st.sidebar.selectbox(
+    "サービス コース",
+    ["すべて", "センター", "ワイド"],
+    format_func=lambda x: f"すべて ({cnt_s2})" if x == "すべて" else (f"センター ({c_srv_cen})" if x == "センター" else f"ワイド ({c_srv_wde})"),
+    key="f_serve",
+    on_change=on_filter_change
+)
 
-sel_serve = st.sidebar.selectbox("サービス コース", opt_srv_list, format_func=format_srv, key="f_serve", on_change=reset_point_index)
-
-# 第3段階 (df_stage3: サービス考慮)
+# 第3段階の母集団（サービス反映）
 if sel_serve == "センター":
     df_stage3 = df_stage2[df_stage2['has_serve_center'] == True]
 elif sel_serve == "ワイド":
@@ -307,104 +312,96 @@ else:
 
 cnt_s3 = len(df_stage3)
 
-# 4. グラウンドストローク
-# 4-1. タイプ
+# 4. ストローク タイプ
 c_strk_fh = len(df_stage3[df_stage3['has_stroke_fore'] == True])
 c_strk_bh = len(df_stage3[df_stage3['has_stroke_back'] == True])
 
-col_gs1, col_gs2 = st.sidebar.columns(2)
-with col_gs1:
-    opt_gs_type_list = ["すべて", "フォア", "バック"]
-    def format_gs_t(opt):
-        if opt == "すべて": return f"すべて ({cnt_s3})"
-        if opt == "フォア": return f"フォア ({c_strk_fh})"
-        if opt == "バック": return f"バック ({c_strk_bh})"
-        return opt
-    sel_gs_type = st.selectbox("ストローク タイプ", opt_gs_type_list, format_func=format_gs_t, key="f_gs_type", on_change=reset_point_index)
+sel_gs_type = st.sidebar.selectbox(
+    "ストローク タイプ",
+    ["すべて", "フォア", "バック"],
+    format_func=lambda x: f"すべて ({cnt_s3})" if x == "すべて" else (f"フォア ({c_strk_fh})" if x == "フォア" else f"バック ({c_strk_bh})"),
+    key="f_gs_type",
+    on_change=on_filter_change
+)
 
-# 4-2. コース（ストロークタイプに連動）
+# 4-2. ストローク コース（ストロークタイプに連動）
 if sel_gs_type == "フォア":
-    df_gs_type = df_stage3[df_stage3['has_stroke_fore'] == True]
-    c_gs_cr = len(df_gs_type[df_gs_type['has_stroke_fore_cross'] == True])
-    c_gs_in = len(df_gs_type[df_gs_type['has_stroke_fore_inside'] == True])
+    df_gs_t = df_stage3[df_stage3['has_stroke_fore'] == True]
+    c_gs_cr = len(df_gs_t[df_gs_t['has_stroke_fore_cross'] == True])
+    c_gs_in = len(df_gs_t[df_gs_t['has_stroke_fore_inside'] == True])
 elif sel_gs_type == "バック":
-    df_gs_type = df_stage3[df_stage3['has_stroke_back'] == True]
-    c_gs_cr = len(df_gs_type[df_gs_type['has_stroke_back_cross'] == True])
-    c_gs_in = len(df_gs_type[df_gs_type['has_stroke_back_inside'] == True])
+    df_gs_t = df_stage3[df_stage3['has_stroke_back'] == True]
+    c_gs_cr = len(df_gs_t[df_gs_t['has_stroke_back_cross'] == True])
+    c_gs_in = len(df_gs_t[df_gs_t['has_stroke_back_inside'] == True])
 else:
-    df_gs_type = df_stage3
-    c_gs_cr = len(df_gs_type[df_gs_type['has_stroke_cross'] == True])
-    c_gs_in = len(df_gs_type[df_gs_type['has_stroke_inside'] == True])
+    df_gs_t = df_stage3
+    c_gs_cr = len(df_gs_t[df_gs_t['has_stroke_cross'] == True])
+    c_gs_in = len(df_gs_t[df_gs_t['has_stroke_inside'] == True])
 
-cnt_gs_t = len(df_gs_type)
+cnt_gs_t = len(df_gs_t)
 
-with col_gs2:
-    opt_gs_course_list = ["すべて", "クロス", "逆クロス"]
-    def format_gs_c(opt):
-        if opt == "すべて": return f"すべて ({cnt_gs_t})"
-        if opt == "クロス": return f"クロス ({c_gs_cr})"
-        if opt == "逆クロス": return f"逆クロス ({c_gs_in})"
-        return opt
-    sel_gs_course = st.selectbox("ストローク コース", opt_gs_course_list, format_func=format_gs_c, key="f_gs_course", on_change=reset_point_index)
+sel_gs_course = st.sidebar.selectbox(
+    "ストローク コース",
+    ["すべて", "クロス", "逆クロス"],
+    format_func=lambda x: f"すべて ({cnt_gs_t})" if x == "すべて" else (f"クロス ({c_gs_cr})" if x == "クロス" else f"逆クロス ({c_gs_in})"),
+    key="f_gs_course",
+    on_change=on_filter_change
+)
 
-# 5. ボレー
-# 5-1. タイプ
+# 5. ボレー タイプ
 c_vol_fh = len(df_stage3[df_stage3['has_volley_fore'] == True])
 c_vol_bh = len(df_stage3[df_stage3['has_volley_back'] == True])
 
-col_vol1, col_vol2 = st.sidebar.columns(2)
-with col_vol1:
-    opt_vol_type_list = ["すべて", "フォア", "バック"]
-    def format_vol_t(opt):
-        if opt == "すべて": return f"すべて ({cnt_s3})"
-        if opt == "フォア": return f"フォア ({c_vol_fh})"
-        if opt == "バック": return f"バック ({c_vol_bh})"
-        return opt
-    sel_vol_type = st.selectbox("ボレー タイプ", opt_vol_type_list, format_func=format_vol_t, key="f_vol_type", on_change=reset_point_index)
+sel_vol_type = st.sidebar.selectbox(
+    "ボレー タイプ",
+    ["すべて", "フォア", "バック"],
+    format_func=lambda x: f"すべて ({cnt_s3})" if x == "すべて" else (f"フォア ({c_vol_fh})" if x == "フォア" else f"バック ({c_vol_bh})"),
+    key="f_vol_type",
+    on_change=on_filter_change
+)
 
-# 5-2. コース（ボレータイプに連動）
+# 5-2. ボレー コース（ボレータイプに連動）
 if sel_vol_type == "フォア":
-    df_vol_type = df_stage3[df_stage3['has_volley_fore'] == True]
-    c_vol_cr = len(df_vol_type[df_vol_type['has_volley_fore_cross'] == True])
-    c_vol_in = len(df_vol_type[df_vol_type['has_volley_fore_inside'] == True])
+    df_vol_t = df_stage3[df_stage3['has_volley_fore'] == True]
+    c_vol_cr = len(df_vol_t[df_vol_t['has_volley_fore_cross'] == True])
+    c_vol_in = len(df_vol_t[df_vol_t['has_volley_fore_inside'] == True])
 elif sel_vol_type == "バック":
-    df_vol_type = df_stage3[df_stage3['has_volley_back'] == True]
-    c_vol_cr = len(df_vol_type[df_vol_type['has_volley_back_cross'] == True])
-    c_vol_in = len(df_vol_type[df_vol_type['has_volley_back_inside'] == True])
+    df_vol_t = df_stage3[df_stage3['has_volley_back'] == True]
+    c_vol_cr = len(df_vol_t[df_vol_t['has_volley_back_cross'] == True])
+    c_vol_in = len(df_vol_t[df_vol_t['has_volley_back_inside'] == True])
 else:
-    df_vol_type = df_stage3
-    c_vol_cr = len(df_vol_type[df_vol_type['has_volley_cross'] == True])
-    c_vol_in = len(df_vol_type[df_vol_type['has_volley_inside'] == True])
+    df_vol_t = df_stage3
+    c_vol_cr = len(df_vol_t[df_vol_t['has_volley_cross'] == True])
+    c_vol_in = len(df_vol_t[df_vol_t['has_volley_inside'] == True])
 
-cnt_vol_t = len(df_vol_type)
+cnt_vol_t = len(df_vol_t)
 
-with col_vol2:
-    opt_vol_course_list = ["すべて", "クロス", "逆クロス"]
-    def format_vol_c(opt):
-        if opt == "すべて": return f"すべて ({cnt_vol_t})"
-        if opt == "クロス": return f"クロス ({c_vol_cr})"
-        if opt == "逆クロス": return f"逆クロス ({c_vol_in})"
-        return opt
-    sel_vol_course = st.selectbox("ボレー コース", opt_vol_course_list, format_func=format_vol_c, key="f_vol_course", on_change=reset_point_index)
+sel_vol_course = st.sidebar.selectbox(
+    "ボレー コース",
+    ["すべて", "クロス", "逆クロス"],
+    format_func=lambda x: f"すべて ({cnt_vol_t})" if x == "すべて" else (f"クロス ({c_vol_cr})" if x == "クロス" else f"逆クロス ({c_vol_in})"),
+    key="f_vol_course",
+    on_change=on_filter_change
+)
 
 # 6. スマッシュ
 c_sm_cr = len(df_stage3[df_stage3['has_smash_cross'] == True])
 c_sm_in = len(df_stage3[df_stage3['has_smash_inside'] == True])
 
-opt_smash_list = ["すべて", "クロス", "逆クロス"]
-def format_smash(opt):
-    if opt == "すべて": return f"すべて ({cnt_s3})"
-    if opt == "クロス": return f"クロス ({c_sm_cr})"
-    if opt == "逆クロス": return f"逆クロス ({c_sm_in})"
-    return opt
-sel_smash = st.sidebar.selectbox("スマッシュ コース", opt_smash_list, format_func=format_smash, key="f_smash", on_change=reset_point_index)
+sel_smash = st.sidebar.selectbox(
+    "スマッシュ コース",
+    ["すべて", "クロス", "逆クロス"],
+    format_func=lambda x: f"すべて ({cnt_s3})" if x == "すべて" else (f"クロス ({c_sm_cr})" if x == "クロス" else f"逆クロス ({c_sm_in})"),
+    key="f_smash",
+    on_change=on_filter_change
+)
 
 # ----------------------------------------------------
 # 最終フィルタ適用処理
 # ----------------------------------------------------
 cond = pd.Series(True, index=df_stage3.index)
 
-# ストローク条件
+# ストローク
 if sel_gs_type == "フォア":
     if sel_gs_course == "クロス":
         cond &= (df_stage3['has_stroke_fore_cross'] == True)
@@ -425,7 +422,7 @@ else:
     elif sel_gs_course == "逆クロス":
         cond &= (df_stage3['has_stroke_inside'] == True)
 
-# ボレー条件
+# ボレー
 if sel_vol_type == "フォア":
     if sel_vol_course == "クロス":
         cond &= (df_stage3['has_volley_fore_cross'] == True)
@@ -446,7 +443,7 @@ else:
     elif sel_vol_course == "逆クロス":
         cond &= (df_stage3['has_volley_inside'] == True)
 
-# スマッシュ条件
+# スマッシュ
 if sel_smash == "クロス":
     cond &= (df_stage3['has_smash_cross'] == True)
 elif sel_smash == "逆クロス":
@@ -465,9 +462,6 @@ point_list = filtered_points['Point'].tolist()
 # ----------------------------------------------------
 st.sidebar.markdown("---")
 st.sidebar.header(f"🎯 ポイント選択 (該当: {len(point_list)} 件)")
-
-if "current_point_idx" not in st.session_state:
-    st.session_state.current_point_idx = 0
 
 if st.session_state.current_point_idx >= len(point_list):
     st.session_state.current_point_idx = 0
