@@ -409,7 +409,40 @@ selected_point = point_list[st.session_state.current_point_idx]
 p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
 p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
 
-# PC時は2カラム、スマホ時は自然に縦積み
+# スマホでも絶対に3分割ボタンを横並び1行に維持するCSS（メディアクエリで画面幅に関わらず強制）
+st.markdown("""
+    <style>
+    /* 親カラムに関係なく、ボタン群のラッパーを強制flex横並びにする */
+    div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 6px !important;
+        width: 100% !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) > div[data-testid="column"] {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    /* ドロップダウンの入る中央カラムを少し広めに確保 */
+    div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) > div[data-testid="column"]:nth-child(2) {
+        flex: 2 1 auto !important;
+    }
+    div[data-testid="stButton"] button {
+        padding: 4px 6px !important;
+        height: 40px !important;
+        font-size: 13px !important;
+        font-weight: bold !important;
+    }
+    div[data-baseweb="select"] {
+        min-height: 40px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# PC時は左右2カラム分割
 col1, col2 = st.columns([1, 1.2])
 
 with col1:
@@ -433,28 +466,9 @@ with col1:
 
 with col2:
     # ----------------------------------------------------
-    # スマホでも絶対に折り返さない1行ナビゲーションバー
+    # スマホでも絶対に1行横並びになるコントローラーバー
     # ----------------------------------------------------
-    # CSSで3要素の横並び配置を強制＆余白・ボタン高さを統一
-    st.markdown("""
-        <style>
-        div[data-testid="column"] {
-            min-width: 0 !important;
-        }
-        div[data-testid="stHorizontalBlock"] {
-            align-items: center !important;
-            flex-wrap: nowrap !important;
-            gap: 4px !important;
-        }
-        div[data-testid="stButton"] button {
-            padding: 2px 4px !important;
-            height: 38px !important;
-            font-size: 13px !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.8, 1])
+    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.8, 1], gap="small")
     
     with nav_c1:
         if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
@@ -468,6 +482,7 @@ with col2:
             if chosen in point_list:
                 st.session_state.current_point_idx = point_list.index(chosen)
         
+        # 選択肢ラベルに「Pt #」を明記して中央に配置
         st.selectbox(
             "Point #",
             options=point_list,
@@ -484,7 +499,7 @@ with col2:
                 st.rerun()
 
     st.caption(f"該当: **{st.session_state.current_point_idx + 1} / {len(point_list)}** 件 (Point #{selected_point})")
-    
+
     # コート描画処理
     NET_Y = 11.885
     focal_shots = p_shots[p_shots['Player'] == target_player]
@@ -574,7 +589,7 @@ with col2:
             ax.plot(target_x, target_y, marker='X', markersize=16, color=color_net_miss, markeredgecolor='#ffffff', markeredgewidth=2, zorder=11)
         else:
             b_marker = '*' if cur['result'] == 'IN' else 'x'
-            ax.plot(target_x, target_y, marker=b_marker, markersize=11, color=annotation_c, markeredgecolor='#ffffff', markeredgewidth=1, zorder=4)
+            ax.plot(target_x, target_y, marker=b_marker, markersize=11, color=annotation_c, markeredgecolor='#ffffff', markeredgewidth=1.5, zorder=4)
             
         # バウンドから次の打点への点線
         if i + 1 < len(records) and not is_net:
