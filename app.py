@@ -383,11 +383,8 @@ if final_df.empty:
 point_list = final_df['Point'].tolist()
 
 # ----------------------------------------------------
-# ポイント選択 & ナビゲーション
+# ポイント選択リストの準備（サイドバーからは撤去）
 # ----------------------------------------------------
-st.sidebar.markdown("---")
-st.sidebar.header(f"🎯 ポイント選択 (該当: {len(point_list)} 件)")
-
 filter_signature = f"{sel_point}_{sel_finish}_{sel_serve}_{sel_gs_type}_{sel_gs_course}_{sel_vol_type}_{sel_vol_course}_{sel_smash}"
 if "last_filter_signature" not in st.session_state or st.session_state.last_filter_signature != filter_signature:
     st.session_state.last_filter_signature = filter_signature
@@ -396,75 +393,9 @@ if "last_filter_signature" not in st.session_state or st.session_state.last_filt
 if "current_point_idx" not in st.session_state or st.session_state.current_point_idx >= len(point_list):
     st.session_state.current_point_idx = 0
 
-col_prev, col_next = st.sidebar.columns(2)
-with col_prev:
-    if st.button("◀ 前へ", use_container_width=True):
-        if st.session_state.current_point_idx > 0:
-            st.session_state.current_point_idx -= 1
-            st.rerun()
-
-with col_next:
-    if st.button("次へ ▶", use_container_width=True):
-        if st.session_state.current_point_idx < len(point_list) - 1:
-            st.session_state.current_point_idx += 1
-            st.rerun()
-
-selected_point = st.sidebar.selectbox(
-    "Select Point #",
-    options=point_list,
-    index=st.session_state.current_point_idx
-)
-st.session_state.current_point_idx = point_list.index(selected_point)
-
-# マウスホイール操作エリア
-st.sidebar.markdown(
-    """
-    <div id="wheel-box" style="
-        border: 2px dashed #0284c7;
-        border-radius: 8px;
-        padding: 8px;
-        text-align: center;
-        background-color: #0f172a;
-        cursor: ns-resize;
-        margin-top: 6px;
-        user-select: none;
-    ">
-        <span style="font-size: 12px; color: #38bdf8; font-weight: bold;">
-            🖱️ マウスホイール操作エリア
-        </span><br>
-        <span style="font-size: 10px; color: #94a3b8;">
-            この枠上でホイールを回すと前後に移動します
-        </span>
-    </div>
-
-    <script>
-    const box = window.parent.document.getElementById('wheel-box');
-    if (box && !box.hasAttribute('listener-attached')) {
-        box.setAttribute('listener-attached', 'true');
-        box.addEventListener('wheel', function(e) {
-            e.preventDefault();
-            const buttons = window.parent.document.querySelectorAll('button');
-            let prevBtn = null;
-            let nextBtn = null;
-            buttons.forEach(b => {
-                if (b.innerText.includes('前へ')) prevBtn = b;
-                if (b.innerText.includes('次へ')) nextBtn = b;
-            });
-            if (e.deltaY > 0 && nextBtn) {
-                nextBtn.click();
-            } else if (e.deltaY < 0 && prevBtn) {
-                prevBtn.click();
-            }
-        }, { passive: false });
-    }
-    </script>
-    """,
-    unsafe_allow_html=True
-)
-
-st.sidebar.caption(f"位置: **{st.session_state.current_point_idx + 1} / {len(point_list)}** (Point #{selected_point})")
-
-st.sidebar.header("🎨 表示モード")
+# 表示モード切り替えはサイドバーに配置
+st.sidebar.markdown("---")
+st.sidebar.header("🎨 表示設定")
 view_mode = st.sidebar.radio(
     "描画モード",
     ["全ラリー表示", "決着ラスト2打のみ表示"],
@@ -474,10 +405,12 @@ view_mode = st.sidebar.radio(
 # ----------------------------------------------------
 # メイン画面描画
 # ----------------------------------------------------
+selected_point = point_list[st.session_state.current_point_idx]
 p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
 p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
 
-col1, col2 = st.columns([1, 2])
+# PC時は2カラム、スマホ時は自然に縦積み
+col1, col2 = st.columns([1, 1.2])
 
 with col1:
     st.subheader(f"📌 Point {selected_point} 概要")
@@ -499,8 +432,39 @@ with col1:
     st.dataframe(display_df[[c for c in cols_to_show if c in display_df.columns]], use_container_width=True, hide_index=True)
 
 with col2:
+    # ----------------------------------------------------
+    # コートの真上にナビゲーション操作バーを常時表示！
+    # ----------------------------------------------------
+    nav_c1, nav_c2, nav_c3 = st.columns([1.2, 2.2, 1.2])
+    with nav_c1:
+        if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
+            if st.session_state.current_point_idx > 0:
+                st.session_state.current_point_idx -= 1
+                st.rerun()
+    with nav_c2:
+        def on_main_select():
+            chosen = st.session_state.main_pt_select
+            if chosen in point_list:
+                st.session_state.current_point_idx = point_list.index(chosen)
+        
+        st.selectbox(
+            "Point #",
+            options=point_list,
+            index=st.session_state.current_point_idx,
+            key="main_pt_select",
+            on_change=on_main_select,
+            label_visibility="collapsed"
+        )
+    with nav_c3:
+        if st.button("次へ ▶", use_container_width=True, key="main_next"):
+            if st.session_state.current_point_idx < len(point_list) - 1:
+                st.session_state.current_point_idx += 1
+                st.rerun()
+
+    st.caption(f"該当: **{st.session_state.current_point_idx + 1} / {len(point_list)}** 件 (Point #{selected_point})")
+
+    # コート描画処理
     NET_Y = 11.885
-    
     focal_shots = p_shots[p_shots['Player'] == target_player]
     is_far = False
     if not focal_shots.empty:
@@ -588,7 +552,7 @@ with col2:
             ax.plot(target_x, target_y, marker='X', markersize=16, color=color_net_miss, markeredgecolor='#ffffff', markeredgewidth=2, zorder=11)
         else:
             b_marker = '*' if cur['result'] == 'IN' else 'x'
-            ax.plot(target_x, target_y, marker=b_marker, markersize=11, color=annotation_c, markeredgecolor='#ffffff', markeredgewidth=1.5, zorder=4)
+            ax.plot(target_x, target_y, marker=b_marker, markersize=11, color=annotation_c, markeredgecolor='#ffffff', markeredgewidth=1, zorder=4)
             
         # バウンドから次の打点への点線
         if i + 1 < len(records) and not is_net:
@@ -619,11 +583,9 @@ with col2:
     ax.text(0, -2.0, f"NEAR: {target_player}", color='#38bdf8', fontsize=12, fontweight='bold', ha='center')
     ax.text(0, 25.2, "FAR: OPPONENT", color='#fb923c', fontsize=12, fontweight='bold', ha='center')
 
-    # コート全体の表示枠を完全に固定（どんなショットでも一定の大きさ・位置で固定）
     ax.set_xlim(-6.8, 6.8)
     ax.set_ylim(-3.5, 27.2)
     ax.set_aspect('equal', adjustable='box')
     ax.axis('off')
     
-    # 枠を固定して中央寄せで表示
     st.pyplot(fig, use_container_width=False)
