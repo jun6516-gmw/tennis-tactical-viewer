@@ -527,7 +527,7 @@ with col2:
     if view_mode == "決着ラスト2打のみ表示":
         records = records[-min(2, len(records)):]
         
-    fig, ax = plt.subplots(figsize=(7, 12), facecolor='#0f172a')
+    fig, ax = plt.subplots(figsize=(5.5, 9.5), facecolor='#0f172a')
     ax.set_facecolor('#0f172a')
     
     # コート描画
