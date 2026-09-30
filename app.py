@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.font_manager as fm
 
-# OS依存のないフォント設定（英数字・豆腐化防止用フォールバック）
+# OS依存のないフォント設定
 JP_FONTS = [
     'Yu Gothic', 'Meiryo', 'MS Gothic',
     'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
@@ -22,7 +22,6 @@ st.set_page_config(page_title="Tennis Match Tactical Visualizer", layout="wide")
 st.title("🎾 テニス戦術分析ダッシュボード")
 st.caption("SwingVisionのデータから、1ポイントごとのボール軌跡・得失点文脈を可視化します")
 
-# 英語/日本語の表示変換辞書
 STROKE_MAP = {
     'サーブ': 'Serve',
     'フォアハンド': 'Forehand',
@@ -86,7 +85,7 @@ if not players:
 st.sidebar.header("👤 プレイヤー視点設定")
 target_player = st.sidebar.selectbox("手前側に固定するプレイヤーを選択", players, index=0)
 
-# ポイントサマリー作成（得失点・決まり方の判定）
+# ポイントサマリー作成
 @st.cache_data
 def analyze_points(df, focus_player):
     points_data = []
@@ -101,13 +100,13 @@ def analyze_points(df, focus_player):
         last_res = translate_result(last_shot['Result'])
         total_shots = len(group_sorted)
         
-        # ポイントの勝敗 (Point Outcome)
+        # ポイント勝敗
         if last_player == focus_player:
             point_outcome = "取った" if last_res == "IN" else "落とした"
         else:
             point_outcome = "取った" if last_res in ["OUT", "NET"] else "落とした"
             
-        # 決まり方 (Finish Type)
+        # 決まり方
         if last_res == "OUT":
             finish_type = "アウト"
         elif last_res == "NET":
@@ -131,9 +130,7 @@ def analyze_points(df, focus_player):
 
 points_summary_df = analyze_points(shots_df, target_player)
 
-# ----------------------------------------------------
-# ショット特徴量の集計（ポイント単位へのマッピング）
-# ----------------------------------------------------
+# ショット特徴量の集計
 @st.cache_data
 def extract_shot_features(df):
     features = {}
@@ -160,14 +157,14 @@ def extract_shot_features(df):
             stk = str(row.get('Stroke', ''))
             dir_val = str(row.get('Direction', ''))
             
-            # サーブ判定
+            # サーブ
             if 'サーブ' in stk or 'Serve' in stk:
                 if 'センター' in dir_val or 'Center' in dir_val or 'T' in dir_val:
                     feats['has_serve_center'] = True
                 if 'ワイド' in dir_val or 'Wide' in dir_val:
                     feats['has_serve_wide'] = True
             
-            # グラウンドストローク判定
+            # グラウンドストローク
             is_stroke = ('フォアハンド' in stk or 'バックハンド' in stk or 'Forehand' in stk or 'Backhand' in stk) and ('ボレー' not in stk and 'Volley' not in stk and 'スマッシュ' not in stk and 'Smash' not in stk)
             if is_stroke:
                 if 'フォア' in stk or 'Forehand' in stk:
@@ -179,7 +176,7 @@ def extract_shot_features(df):
                 if '逆クロス' in dir_val or 'Inside-Out' in dir_val or 'ストレート' in dir_val or 'Down the Line' in dir_val:
                     feats['has_stroke_inside'] = True
 
-            # ボレー判定
+            # ボレー
             if 'ボレー' in stk or 'Volley' in stk:
                 if 'フォア' in stk or 'Forehand' in stk:
                     feats['has_volley_fore'] = True
@@ -190,7 +187,7 @@ def extract_shot_features(df):
                 if '逆クロス' in dir_val or 'Inside-Out' in dir_val or 'ストレート' in dir_val or 'Down the Line' in dir_val:
                     feats['has_volley_inside'] = True
 
-            # スマッシュ判定
+            # スマッシュ
             if 'スマッシュ' in stk or 'Smash' in stk:
                 if 'クロス' in dir_val or 'Cross' in dir_val:
                     feats['has_smash_cross'] = True
@@ -204,7 +201,7 @@ shot_features_df = extract_shot_features(shots_df)
 full_meta_df = pd.merge(points_summary_df, shot_features_df, on='Point', how='left')
 
 # ----------------------------------------------------
-# サイドバー: フィルタUI（件数カウント付き）
+# サイドバー: 連動型フィルタUI（母集団連動カウント）
 # ----------------------------------------------------
 st.sidebar.header("🔍 フィルタ設定")
 
@@ -213,150 +210,155 @@ c_all = len(full_meta_df)
 c_won = len(full_meta_df[full_meta_df['Point_Outcome'] == '取った'])
 c_lost = len(full_meta_df[full_meta_df['Point_Outcome'] == '落とした'])
 
-opt_point = {
-    f"すべて ({c_all})": "すべて",
-    f"取った ({c_won})": "取った",
-    f"落とした ({c_lost})": "落とした"
-}
-sel_point_label = st.sidebar.selectbox("■ ポイント", list(opt_point.keys()))
-sel_point = opt_point[sel_point_label]
+opt_point_list = ["すべて", "取った", "落とした"]
+def format_point(opt):
+    if opt == "すべて": return f"すべて ({c_all})"
+    if opt == "取った": return f"取った ({c_won})"
+    if opt == "落とした": return f"落とした ({c_lost})"
+    return opt
 
-# 2. 決まり方（エース／アウト／ネット／すべて）
-c_ace = len(full_meta_df[full_meta_df['Finish_Type'] == 'エース'])
-c_out = len(full_meta_df[full_meta_df['Finish_Type'] == 'アウト'])
-c_net = len(full_meta_df[full_meta_df['Finish_Type'] == 'ネット'])
+sel_point = st.sidebar.selectbox("■ ポイント", opt_point_list, format_func=format_point, key="f_point")
 
-opt_finish = {
-    f"すべて ({c_all})": "すべて",
-    f"エース ({c_ace})": "エース",
-    f"アウト ({c_out})": "アウト",
-    f"ネット ({c_net})": "ネット"
-}
-sel_finish_label = st.sidebar.selectbox("■ 決まり方", list(opt_finish.keys()))
-sel_finish = opt_finish[sel_finish_label]
+# ポイント選択に基づいた現在の母集団 (Base DF)
+if sel_point == "すべて":
+    base_df = full_meta_df
+else:
+    base_df = full_meta_df[full_meta_df['Point_Outcome'] == sel_point]
+
+base_count = len(base_df)
+
+# 2. 決まり方（エース／アウト／ネット／すべて） - base_dfに連動
+c_ace = len(base_df[base_df['Finish_Type'] == 'エース'])
+c_out = len(base_df[base_df['Finish_Type'] == 'アウト'])
+c_net = len(base_df[base_df['Finish_Type'] == 'ネット'])
+
+opt_finish_list = ["すべて", "エース", "アウト", "ネット"]
+def format_finish(opt):
+    if opt == "すべて": return f"すべて ({base_count})"
+    if opt == "エース": return f"エース ({c_ace})"
+    if opt == "アウト": return f"アウト ({c_out})"
+    if opt == "ネット": return f"ネット ({c_net})"
+    return opt
+
+sel_finish = st.sidebar.selectbox("■ 決まり方", opt_finish_list, format_func=format_finish, key="f_finish")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("##### 🎾 ショットフィルタ")
 
-# サービス
-c_srv_all = len(full_meta_df)
-c_srv_cen = len(full_meta_df[full_meta_df['has_serve_center'] == True])
-c_srv_wde = len(full_meta_df[full_meta_df['has_serve_wide'] == True])
+# サービス - base_dfに連動
+c_srv_cen = len(base_df[base_df['has_serve_center'] == True])
+c_srv_wde = len(base_df[base_df['has_serve_wide'] == True])
 
-opt_serve = {
-    f"すべて ({c_srv_all})": "すべて",
-    f"センター ({c_srv_cen})": "センター",
-    f"ワイド ({c_srv_wde})": "ワイド"
-}
-sel_serve_label = st.sidebar.selectbox("サービス コース", list(opt_serve.keys()))
-sel_serve = opt_serve[sel_serve_label]
+opt_srv_list = ["すべて", "センター", "ワイド"]
+def format_srv(opt):
+    if opt == "すべて": return f"すべて ({base_count})"
+    if opt == "センター": return f"センター ({c_srv_cen})"
+    if opt == "ワイド": return f"ワイド ({c_srv_wde})"
+    return opt
 
-# グラウンドストローク
-c_strk_all = len(full_meta_df)
-c_strk_fh = len(full_meta_df[full_meta_df['has_stroke_fore'] == True])
-c_strk_bh = len(full_meta_df[full_meta_df['has_stroke_back'] == True])
-c_strk_cr = len(full_meta_df[full_meta_df['has_stroke_cross'] == True])
-c_strk_in = len(full_meta_df[full_meta_df['has_stroke_inside'] == True])
+sel_serve = st.sidebar.selectbox("サービス コース", opt_srv_list, format_func=format_srv, key="f_serve")
+
+# グラウンドストローク - base_dfに連動
+c_strk_fh = len(base_df[base_df['has_stroke_fore'] == True])
+c_strk_bh = len(base_df[base_df['has_stroke_back'] == True])
+c_strk_cr = len(base_df[base_df['has_stroke_cross'] == True])
+c_strk_in = len(base_df[base_df['has_stroke_inside'] == True])
 
 col_gs1, col_gs2 = st.sidebar.columns(2)
 with col_gs1:
-    opt_gs_type = {
-        f"すべて ({c_strk_all})": "すべて",
-        f"フォア ({c_strk_fh})": "フォア",
-        f"バック ({c_strk_bh})": "バック"
-    }
-    sel_gs_type_label = st.selectbox("ストローク タイプ", list(opt_gs_type.keys()))
-    sel_gs_type = opt_gs_type[sel_gs_type_label]
+    opt_gs_type_list = ["すべて", "フォア", "バック"]
+    def format_gs_t(opt):
+        if opt == "すべて": return f"すべて ({base_count})"
+        if opt == "フォア": return f"フォア ({c_strk_fh})"
+        if opt == "バック": return f"バック ({c_strk_bh})"
+        return opt
+    sel_gs_type = st.selectbox("ストローク タイプ", opt_gs_type_list, format_func=format_gs_t, key="f_gs_type")
 
 with col_gs2:
-    opt_gs_course = {
-        f"すべて ({c_strk_all})": "すべて",
-        f"クロス ({c_strk_cr})": "クロス",
-        f"逆クロス ({c_strk_in})": "逆クロス"
-    }
-    sel_gs_course_label = st.selectbox("ストローク コース", list(opt_gs_course.keys()))
-    sel_gs_course = opt_gs_course[sel_gs_course_label]
+    opt_gs_course_list = ["すべて", "クロス", "逆クロス"]
+    def format_gs_c(opt):
+        if opt == "すべて": return f"すべて ({base_count})"
+        if opt == "クロス": return f"クロス ({c_strk_cr})"
+        if opt == "逆クロス": return f"逆クロス ({c_strk_in})"
+        return opt
+    sel_gs_course = st.selectbox("ストローク コース", opt_gs_course_list, format_func=format_gs_c, key="f_gs_course")
 
-# ボレー
-c_vol_all = len(full_meta_df)
-c_vol_fh = len(full_meta_df[full_meta_df['has_volley_fore'] == True])
-c_vol_bh = len(full_meta_df[full_meta_df['has_volley_back'] == True])
-c_vol_cr = len(full_meta_df[full_meta_df['has_volley_cross'] == True])
-c_vol_in = len(full_meta_df[full_meta_df['has_volley_inside'] == True])
+# ボレー - base_dfに連動
+c_vol_fh = len(base_df[base_df['has_volley_fore'] == True])
+c_vol_bh = len(base_df[base_df['has_volley_back'] == True])
+c_vol_cr = len(base_df[base_df['has_volley_cross'] == True])
+c_vol_in = len(base_df[base_df['has_volley_inside'] == True])
 
 col_vol1, col_vol2 = st.sidebar.columns(2)
 with col_vol1:
-    opt_vol_type = {
-        f"すべて ({c_vol_all})": "すべて",
-        f"フォア ({c_vol_fh})": "フォア",
-        f"バック ({c_vol_bh})": "バック"
-    }
-    sel_vol_type_label = st.selectbox("ボレー タイプ", list(opt_vol_type.keys()))
-    sel_vol_type = opt_vol_type[sel_vol_type_label]
+    opt_vol_type_list = ["すべて", "フォア", "バック"]
+    def format_vol_t(opt):
+        if opt == "すべて": return f"すべて ({base_count})"
+        if opt == "フォア": return f"フォア ({c_vol_fh})"
+        if opt == "バック": return f"バック ({c_vol_bh})"
+        return opt
+    sel_vol_type = st.selectbox("ボレー タイプ", opt_vol_type_list, format_func=format_vol_t, key="f_vol_type")
 
 with col_vol2:
-    opt_vol_course = {
-        f"すべて ({c_vol_all})": "すべて",
-        f"クロス ({c_vol_cr})": "クロス",
-        f"逆クロス ({c_vol_in})": "逆クロス"
-    }
-    sel_vol_course_label = st.selectbox("ボレー コース", list(opt_vol_course.keys()))
-    sel_vol_course = opt_vol_course[sel_vol_course_label]
+    opt_vol_course_list = ["すべて", "クロス", "逆クロス"]
+    def format_vol_c(opt):
+        if opt == "すべて": return f"すべて ({base_count})"
+        if opt == "クロス": return f"クロス ({c_vol_cr})"
+        if opt == "逆クロス": return f"逆クロス ({c_vol_in})"
+        return opt
+    sel_vol_course = st.selectbox("ボレー コース", opt_vol_course_list, format_func=format_vol_c, key="f_vol_course")
 
-# スマッシュ
-c_sm_all = len(full_meta_df)
-c_sm_cr = len(full_meta_df[full_meta_df['has_smash_cross'] == True])
-c_sm_in = len(full_meta_df[full_meta_df['has_smash_inside'] == True])
+# スマッシュ - base_dfに連動
+c_sm_cr = len(base_df[base_df['has_smash_cross'] == True])
+c_sm_in = len(base_df[base_df['has_smash_inside'] == True])
 
-opt_smash = {
-    f"すべて ({c_sm_all})": "すべて",
-    f"クロス ({c_sm_cr})": "クロス",
-    f"逆クロス ({c_sm_in})": "逆クロス"
-}
-sel_smash_label = st.sidebar.selectbox("スマッシュ コース", list(opt_smash.keys()))
-sel_smash = opt_smash[sel_smash_label]
+opt_smash_list = ["すべて", "クロス", "逆クロス"]
+def format_smash(opt):
+    if opt == "すべて": return f"すべて ({base_count})"
+    if opt == "クロス": return f"クロス ({c_sm_cr})"
+    if opt == "逆クロス": return f"逆クロス ({c_sm_in})"
+    return opt
+sel_smash = st.sidebar.selectbox("スマッシュ コース", opt_smash_list, format_func=format_smash, key="f_smash")
 
 # ----------------------------------------------------
-# フィルタ適用処理
+# 最終フィルタ適用処理
 # ----------------------------------------------------
-cond = pd.Series(True, index=full_meta_df.index)
+cond = pd.Series(True, index=base_df.index)
 
-if sel_point != "すべて":
-    cond &= (full_meta_df['Point_Outcome'] == sel_point)
 if sel_finish != "すべて":
-    cond &= (full_meta_df['Finish_Type'] == sel_finish)
+    cond &= (base_df['Finish_Type'] == sel_finish)
 
 if sel_serve == "センター":
-    cond &= (full_meta_df['has_serve_center'] == True)
+    cond &= (base_df['has_serve_center'] == True)
 elif sel_serve == "ワイド":
-    cond &= (full_meta_df['has_serve_wide'] == True)
+    cond &= (base_df['has_serve_wide'] == True)
 
 if sel_gs_type == "フォア":
-    cond &= (full_meta_df['has_stroke_fore'] == True)
+    cond &= (base_df['has_stroke_fore'] == True)
 elif sel_gs_type == "バック":
-    cond &= (full_meta_df['has_stroke_back'] == True)
+    cond &= (base_df['has_stroke_back'] == True)
 
 if sel_gs_course == "クロス":
-    cond &= (full_meta_df['has_stroke_cross'] == True)
+    cond &= (base_df['has_stroke_cross'] == True)
 elif sel_gs_course == "逆クロス":
-    cond &= (full_meta_df['has_stroke_inside'] == True)
+    cond &= (base_df['has_stroke_inside'] == True)
 
 if sel_vol_type == "フォア":
-    cond &= (full_meta_df['has_volley_fore'] == True)
+    cond &= (base_df['has_volley_fore'] == True)
 elif sel_vol_type == "バック":
-    cond &= (full_meta_df['has_volley_back'] == True)
+    cond &= (base_df['has_volley_back'] == True)
 
 if sel_vol_course == "クロス":
-    cond &= (full_meta_df['has_volley_cross'] == True)
+    cond &= (base_df['has_volley_cross'] == True)
 elif sel_vol_course == "逆クロス":
-    cond &= (full_meta_df['has_volley_inside'] == True)
+    cond &= (base_df['has_volley_inside'] == True)
 
 if sel_smash == "クロス":
-    cond &= (full_meta_df['has_smash_cross'] == True)
+    cond &= (base_df['has_smash_cross'] == True)
 elif sel_smash == "逆クロス":
-    cond &= (full_meta_df['has_smash_inside'] == True)
+    cond &= (base_df['has_smash_inside'] == True)
 
-filtered_points = full_meta_df[cond]
+filtered_points = base_df[cond]
 
 if filtered_points.empty:
     st.warning("⚠️ 選択した条件に一致するポイントがありません。フィルタ条件を緩和してください。")
@@ -401,7 +403,6 @@ with col_next:
             st.session_state.current_point_idx += 1
             st.rerun()
 
-# マウスホイール操作エリア（JavaScript埋め込み）
 st.sidebar.markdown(
     """
     <div id="wheel-box" style="
@@ -599,7 +600,7 @@ with col2:
                 ha='center', va='center', zorder=7,
                 bbox=dict(boxstyle='round,pad=0.25', facecolor='#0f172a', edgecolor=bbox_c, alpha=0.9))
 
-    # 手前・奥ラベル（選手名はそのまま維持）
+    # 手前・奥ラベル
     ax.text(0, -2.0, f"NEAR: {target_player}", color='#38bdf8', fontsize=12, fontweight='bold', ha='center')
     ax.text(0, 25.2, "FAR: OPPONENT", color='#fb923c', fontsize=12, fontweight='bold', ha='center')
 
