@@ -352,8 +352,8 @@ with col2:
                 bbox=dict(boxstyle='round,pad=0.25', facecolor='#0f172a', edgecolor=bbox_c, alpha=0.9))
 
     # 手前・奥のラベル
-    ax.text(0, -2.0, f"手前 (NEAR): {target_player}", color='#38bdf8', fontsize=12, fontweight='bold', ha='center')
-    ax.text(0, 25.2, "奥 (FAR): 対戦相手", color='#fb923c', fontsize=12, fontweight='bold', ha='center')
+    ax.text(0, -2.0, f"NEAR: {target_player}", color='#38bdf8', fontsize=12, fontweight='bold', ha='center')
+    ax.text(0, 25.2, "FAR: OPPONENT", color='#fb923c', fontsize=12, fontweight='bold', ha='center')
 
     ax.set_xlim(-6.5, 6.5)
     ax.set_ylim(-3.5, 27)
