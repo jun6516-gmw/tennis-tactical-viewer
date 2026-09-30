@@ -130,7 +130,7 @@ def analyze_points(df, focus_player):
 
 points_summary_df = analyze_points(shots_df, target_player)
 
-# ショット特徴量の集計
+# ショット特徴量の集計（判定の柔軟性を強化）
 @st.cache_data
 def extract_shot_features(df):
     features = {}
@@ -165,20 +165,26 @@ def extract_shot_features(df):
             stk = str(row.get('Stroke', ''))
             dir_val = str(row.get('Direction', ''))
             
-            # サーブ
-            if 'サーブ' in stk or 'Serve' in stk:
-                if 'センター' in dir_val or 'Center' in dir_val or 'T' in dir_val:
+            stk_clean = stk.lower().strip()
+            dir_clean = dir_val.lower().strip()
+            
+            is_serve = ('サーブ' in stk or 'serve' in stk_clean)
+            is_volley = ('ボレー' in stk or 'volley' in stk_clean)
+            is_smash = ('スマッシュ' in stk or 'smash' in stk_clean)
+            
+            # サーブ判定
+            if is_serve:
+                if 'センター' in dir_val or 'center' in dir_clean or ' t' in dir_clean or dir_clean == 't':
                     feats['has_serve_center'] = True
-                if 'ワイド' in dir_val or 'Wide' in dir_val:
+                if 'ワイド' in dir_val or 'wide' in dir_clean:
                     feats['has_serve_wide'] = True
             
-            # グラウンドストローク
-            is_stroke = ('フォアハンド' in stk or 'バックハンド' in stk or 'Forehand' in stk or 'Backhand' in stk) and ('ボレー' not in stk and 'Volley' not in stk and 'スマッシュ' not in stk and 'Smash' not in stk)
-            if is_stroke:
-                is_fh = ('フォア' in stk or 'Forehand' in stk)
-                is_bh = ('バック' in stk or 'Backhand' in stk)
-                is_cr = ('クロス' in dir_val or 'Cross' in dir_val)
-                is_in = ('逆クロス' in dir_val or 'Inside-Out' in dir_val or 'ストレート' in dir_val or 'Down the Line' in dir_val)
+            # グラウンドストローク判定（サーブ・ボレー・スマッシュ以外）
+            if not is_serve and not is_volley and not is_smash:
+                is_fh = ('フォア' in stk or 'forehand' in stk_clean or stk_clean.startswith('fh'))
+                is_bh = ('バック' in stk or 'backhand' in stk_clean or stk_clean.startswith('bh'))
+                is_cr = ('クロス' in dir_val or 'cross' in dir_clean)
+                is_in = ('逆クロス' in dir_val or 'inside' in dir_clean or 'ストレート' in dir_val or 'down the line' in dir_clean or 'line' in dir_clean)
                 
                 if is_fh:
                     feats['has_stroke_fore'] = True
@@ -193,12 +199,12 @@ def extract_shot_features(df):
                 if is_in:
                     feats['has_stroke_inside'] = True
 
-            # ボレー
-            if 'ボレー' in stk or 'Volley' in stk:
-                is_fh = ('フォア' in stk or 'Forehand' in stk)
-                is_bh = ('バック' in stk or 'Backhand' in stk)
-                is_cr = ('クロス' in dir_val or 'Cross' in dir_val)
-                is_in = ('逆クロス' in dir_val or 'Inside-Out' in dir_val or 'ストレート' in dir_val or 'Down the Line' in dir_val)
+            # ボレー判定
+            if is_volley:
+                is_fh = ('フォア' in stk or 'forehand' in stk_clean or stk_clean.startswith('fh'))
+                is_bh = ('バック' in stk or 'backhand' in stk_clean or stk_clean.startswith('bh'))
+                is_cr = ('クロス' in dir_val or 'cross' in dir_clean)
+                is_in = ('逆クロス' in dir_val or 'inside' in dir_clean or 'ストレート' in dir_val or 'down the line' in dir_clean or 'line' in dir_clean)
                 
                 if is_fh:
                     feats['has_volley_fore'] = True
@@ -213,11 +219,13 @@ def extract_shot_features(df):
                 if is_in:
                     feats['has_volley_inside'] = True
 
-            # スマッシュ
-            if 'スマッシュ' in stk or 'Smash' in stk:
-                if 'クロス' in dir_val or 'Cross' in dir_val:
+            # スマッシュ判定
+            if is_smash:
+                is_cr = ('クロス' in dir_val or 'cross' in dir_clean)
+                is_in = ('逆クロス' in dir_val or 'inside' in dir_clean or 'ストレート' in dir_val or 'down the line' in dir_clean or 'line' in dir_clean)
+                if is_cr:
                     feats['has_smash_cross'] = True
-                if '逆クロス' in dir_val or 'Inside-Out' in dir_val or 'ストレート' in dir_val or 'Down the Line' in dir_val:
+                if is_in:
                     feats['has_smash_inside'] = True
 
         features[pt] = feats
@@ -227,7 +235,7 @@ shot_features_df = extract_shot_features(shots_df)
 full_meta_df = pd.merge(points_summary_df, shot_features_df, on='Point', how='left')
 
 # ----------------------------------------------------
-# サイドバー: 段階連動型フィルタUI（完全同期版）
+# サイドバー: 段階連動型フィルタUI
 # ----------------------------------------------------
 st.sidebar.header("🔍 フィルタ設定")
 
@@ -447,7 +455,6 @@ point_list = final_df['Point'].tolist()
 st.sidebar.markdown("---")
 st.sidebar.header(f"🎯 ポイント選択 (該当: {len(point_list)} 件)")
 
-# セッション状態の安全保持
 filter_signature = f"{sel_point}_{sel_finish}_{sel_serve}_{sel_gs_type}_{sel_gs_course}_{sel_vol_type}_{sel_vol_course}_{sel_smash}"
 if "last_filter_signature" not in st.session_state or st.session_state.last_filter_signature != filter_signature:
     st.session_state.last_filter_signature = filter_signature
