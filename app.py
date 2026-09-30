@@ -145,10 +145,18 @@ def extract_shot_features(df):
             'has_stroke_back': False,
             'has_stroke_cross': False,
             'has_stroke_inside': False,
+            'has_stroke_fore_cross': False,
+            'has_stroke_fore_inside': False,
+            'has_stroke_back_cross': False,
+            'has_stroke_back_inside': False,
             'has_volley_fore': False,
             'has_volley_back': False,
             'has_volley_cross': False,
             'has_volley_inside': False,
+            'has_volley_fore_cross': False,
+            'has_volley_fore_inside': False,
+            'has_volley_back_cross': False,
+            'has_volley_back_inside': False,
             'has_smash_cross': False,
             'has_smash_inside': False,
         }
@@ -167,24 +175,42 @@ def extract_shot_features(df):
             # グラウンドストローク
             is_stroke = ('フォアハンド' in stk or 'バックハンド' in stk or 'Forehand' in stk or 'Backhand' in stk) and ('ボレー' not in stk and 'Volley' not in stk and 'スマッシュ' not in stk and 'Smash' not in stk)
             if is_stroke:
-                if 'フォア' in stk or 'Forehand' in stk:
+                is_fh = ('フォア' in stk or 'Forehand' in stk)
+                is_bh = ('バック' in stk or 'Backhand' in stk)
+                is_cr = ('クロス' in dir_val or 'Cross' in dir_val)
+                is_in = ('逆クロス' in dir_val or 'Inside-Out' in dir_val or 'ストレート' in dir_val or 'Down the Line' in dir_val)
+                
+                if is_fh:
                     feats['has_stroke_fore'] = True
-                if 'バック' in stk or 'Backhand' in stk:
+                    if is_cr: feats['has_stroke_fore_cross'] = True
+                    if is_in: feats['has_stroke_fore_inside'] = True
+                if is_bh:
                     feats['has_stroke_back'] = True
-                if 'クロス' in dir_val or 'Cross' in dir_val:
+                    if is_cr: feats['has_stroke_back_cross'] = True
+                    if is_in: feats['has_stroke_back_inside'] = True
+                if is_cr:
                     feats['has_stroke_cross'] = True
-                if '逆クロス' in dir_val or 'Inside-Out' in dir_val or 'ストレート' in dir_val or 'Down the Line' in dir_val:
+                if is_in:
                     feats['has_stroke_inside'] = True
 
             # ボレー
             if 'ボレー' in stk or 'Volley' in stk:
-                if 'フォア' in stk or 'Forehand' in stk:
+                is_fh = ('フォア' in stk or 'Forehand' in stk)
+                is_bh = ('バック' in stk or 'Backhand' in stk)
+                is_cr = ('クロス' in dir_val or 'Cross' in dir_val)
+                is_in = ('逆クロス' in dir_val or 'Inside-Out' in dir_val or 'ストレート' in dir_val or 'Down the Line' in dir_val)
+                
+                if is_fh:
                     feats['has_volley_fore'] = True
-                if 'バック' in stk or 'Backhand' in stk:
+                    if is_cr: feats['has_volley_fore_cross'] = True
+                    if is_in: feats['has_volley_fore_inside'] = True
+                if is_bh:
                     feats['has_volley_back'] = True
-                if 'クロス' in dir_val or 'Cross' in dir_val:
+                    if is_cr: feats['has_volley_back_cross'] = True
+                    if is_in: feats['has_volley_back_inside'] = True
+                if is_cr:
                     feats['has_volley_cross'] = True
-                if '逆クロス' in dir_val or 'Inside-Out' in dir_val or 'ストレート' in dir_val or 'Down the Line' in dir_val:
+                if is_in:
                     feats['has_volley_inside'] = True
 
             # スマッシュ
@@ -201,11 +227,11 @@ shot_features_df = extract_shot_features(shots_df)
 full_meta_df = pd.merge(points_summary_df, shot_features_df, on='Point', how='left')
 
 # ----------------------------------------------------
-# サイドバー: 連動型フィルタUI（母集団連動カウント）
+# サイドバー: 段階連動型（カスケード）フィルタUI
 # ----------------------------------------------------
 st.sidebar.header("🔍 フィルタ設定")
 
-# 1. ポイント（取った／落とした／すべて）
+# 1. ポイント（全体）
 c_all = len(full_meta_df)
 c_won = len(full_meta_df[full_meta_df['Point_Outcome'] == '取った'])
 c_lost = len(full_meta_df[full_meta_df['Point_Outcome'] == '落とした'])
@@ -219,22 +245,21 @@ def format_point(opt):
 
 sel_point = st.sidebar.selectbox("■ ポイント", opt_point_list, format_func=format_point, key="f_point")
 
-# ポイント選択に基づいた現在の母集団 (Base DF)
+# 第1段階の絞り込み (df_stage1)
 if sel_point == "すべて":
-    base_df = full_meta_df
+    df_stage1 = full_meta_df
 else:
-    base_df = full_meta_df[full_meta_df['Point_Outcome'] == sel_point]
+    df_stage1 = full_meta_df[full_meta_df['Point_Outcome'] == sel_point]
 
-base_count = len(base_df)
-
-# 2. 決まり方（エース／アウト／ネット／すべて） - base_dfに連動
-c_ace = len(base_df[base_df['Finish_Type'] == 'エース'])
-c_out = len(base_df[base_df['Finish_Type'] == 'アウト'])
-c_net = len(base_df[base_df['Finish_Type'] == 'ネット'])
+# 2. 決まり方（ポイント選択に連動）
+cnt_s1 = len(df_stage1)
+c_ace = len(df_stage1[df_stage1['Finish_Type'] == 'エース'])
+c_out = len(df_stage1[df_stage1['Finish_Type'] == 'アウト'])
+c_net = len(df_stage1[df_stage1['Finish_Type'] == 'ネット'])
 
 opt_finish_list = ["すべて", "エース", "アウト", "ネット"]
 def format_finish(opt):
-    if opt == "すべて": return f"すべて ({base_count})"
+    if opt == "すべて": return f"すべて ({cnt_s1})"
     if opt == "エース": return f"エース ({c_ace})"
     if opt == "アウト": return f"アウト ({c_out})"
     if opt == "ネット": return f"ネット ({c_net})"
@@ -242,79 +267,127 @@ def format_finish(opt):
 
 sel_finish = st.sidebar.selectbox("■ 決まり方", opt_finish_list, format_func=format_finish, key="f_finish")
 
+# 第2段階の絞り込み (df_stage2: ポイント + 決まり方)
+if sel_finish == "すべて":
+    df_stage2 = df_stage1
+else:
+    df_stage2 = df_stage1[df_stage1['Finish_Type'] == sel_finish]
+
+cnt_s2 = len(df_stage2)
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("##### 🎾 ショットフィルタ")
 
-# サービス - base_dfに連動
-c_srv_cen = len(base_df[base_df['has_serve_center'] == True])
-c_srv_wde = len(base_df[base_df['has_serve_wide'] == True])
+# 3. サービス（ポイント＋決まり方に連動）
+c_srv_cen = len(df_stage2[df_stage2['has_serve_center'] == True])
+c_srv_wde = len(df_stage2[df_stage2['has_serve_wide'] == True])
 
 opt_srv_list = ["すべて", "センター", "ワイド"]
 def format_srv(opt):
-    if opt == "すべて": return f"すべて ({base_count})"
+    if opt == "すべて": return f"すべて ({cnt_s2})"
     if opt == "センター": return f"センター ({c_srv_cen})"
     if opt == "ワイド": return f"ワイド ({c_srv_wde})"
     return opt
 
 sel_serve = st.sidebar.selectbox("サービス コース", opt_srv_list, format_func=format_srv, key="f_serve")
 
-# グラウンドストローク - base_dfに連動
-c_strk_fh = len(base_df[base_df['has_stroke_fore'] == True])
-c_strk_bh = len(base_df[base_df['has_stroke_back'] == True])
-c_strk_cr = len(base_df[base_df['has_stroke_cross'] == True])
-c_strk_in = len(base_df[base_df['has_stroke_inside'] == True])
+# 第3段階の絞り込み (df_stage3: サービス考慮)
+if sel_serve == "センター":
+    df_stage3 = df_stage2[df_stage2['has_serve_center'] == True]
+elif sel_serve == "ワイド":
+    df_stage3 = df_stage2[df_stage2['has_serve_wide'] == True]
+else:
+    df_stage3 = df_stage2
+
+cnt_s3 = len(df_stage3)
+
+# 4. グラウンドストローク
+# 4-1. タイプ (df_stage3に連動)
+c_strk_fh = len(df_stage3[df_stage3['has_stroke_fore'] == True])
+c_strk_bh = len(df_stage3[df_stage3['has_stroke_back'] == True])
 
 col_gs1, col_gs2 = st.sidebar.columns(2)
 with col_gs1:
     opt_gs_type_list = ["すべて", "フォア", "バック"]
     def format_gs_t(opt):
-        if opt == "すべて": return f"すべて ({base_count})"
+        if opt == "すべて": return f"すべて ({cnt_s3})"
         if opt == "フォア": return f"フォア ({c_strk_fh})"
         if opt == "バック": return f"バック ({c_strk_bh})"
         return opt
     sel_gs_type = st.selectbox("ストローク タイプ", opt_gs_type_list, format_func=format_gs_t, key="f_gs_type")
 
+# 4-2. コース（ストロークタイプに連動）
+if sel_gs_type == "フォア":
+    df_gs_type = df_stage3[df_stage3['has_stroke_fore'] == True]
+    c_gs_cr = len(df_gs_type[df_gs_type['has_stroke_fore_cross'] == True])
+    c_gs_in = len(df_gs_type[df_gs_type['has_stroke_fore_inside'] == True])
+elif sel_gs_type == "バック":
+    df_gs_type = df_stage3[df_stage3['has_stroke_back'] == True]
+    c_gs_cr = len(df_gs_type[df_gs_type['has_stroke_back_cross'] == True])
+    c_gs_in = len(df_gs_type[df_gs_type['has_stroke_back_inside'] == True])
+else:
+    df_gs_type = df_stage3
+    c_gs_cr = len(df_gs_type[df_gs_type['has_stroke_cross'] == True])
+    c_gs_in = len(df_gs_type[df_gs_type['has_stroke_inside'] == True])
+
+cnt_gs_t = len(df_gs_type)
+
 with col_gs2:
     opt_gs_course_list = ["すべて", "クロス", "逆クロス"]
     def format_gs_c(opt):
-        if opt == "すべて": return f"すべて ({base_count})"
-        if opt == "クロス": return f"クロス ({c_strk_cr})"
-        if opt == "逆クロス": return f"逆クロス ({c_strk_in})"
+        if opt == "すべて": return f"すべて ({cnt_gs_t})"
+        if opt == "クロス": return f"クロス ({c_gs_cr})"
+        if opt == "逆クロス": return f"逆クロス ({c_gs_in})"
         return opt
     sel_gs_course = st.selectbox("ストローク コース", opt_gs_course_list, format_func=format_gs_c, key="f_gs_course")
 
-# ボレー - base_dfに連動
-c_vol_fh = len(base_df[base_df['has_volley_fore'] == True])
-c_vol_bh = len(base_df[base_df['has_volley_back'] == True])
-c_vol_cr = len(base_df[base_df['has_volley_cross'] == True])
-c_vol_in = len(base_df[base_df['has_volley_inside'] == True])
+# 5. ボレー
+# 5-1. タイプ (df_stage3に連動)
+c_vol_fh = len(df_stage3[df_stage3['has_volley_fore'] == True])
+c_vol_bh = len(df_stage3[df_stage3['has_volley_back'] == True])
 
 col_vol1, col_vol2 = st.sidebar.columns(2)
 with col_vol1:
     opt_vol_type_list = ["すべて", "フォア", "バック"]
     def format_vol_t(opt):
-        if opt == "すべて": return f"すべて ({base_count})"
+        if opt == "すべて": return f"すべて ({cnt_s3})"
         if opt == "フォア": return f"フォア ({c_vol_fh})"
         if opt == "バック": return f"バック ({c_vol_bh})"
         return opt
     sel_vol_type = st.selectbox("ボレー タイプ", opt_vol_type_list, format_func=format_vol_t, key="f_vol_type")
 
+# 5-2. コース（ボレータイプに連動）
+if sel_vol_type == "フォア":
+    df_vol_type = df_stage3[df_stage3['has_volley_fore'] == True]
+    c_vol_cr = len(df_vol_type[df_vol_type['has_volley_fore_cross'] == True])
+    c_vol_in = len(df_vol_type[df_vol_type['has_volley_fore_inside'] == True])
+elif sel_vol_type == "バック":
+    df_vol_type = df_stage3[df_stage3['has_volley_back'] == True]
+    c_vol_cr = len(df_vol_type[df_vol_type['has_volley_back_cross'] == True])
+    c_vol_in = len(df_vol_type[df_vol_type['has_volley_back_inside'] == True])
+else:
+    df_vol_type = df_stage3
+    c_vol_cr = len(df_vol_type[df_vol_type['has_volley_cross'] == True])
+    c_vol_in = len(df_vol_type[df_vol_type['has_volley_inside'] == True])
+
+cnt_vol_t = len(df_vol_type)
+
 with col_vol2:
     opt_vol_course_list = ["すべて", "クロス", "逆クロス"]
     def format_vol_c(opt):
-        if opt == "すべて": return f"すべて ({base_count})"
+        if opt == "すべて": return f"すべて ({cnt_vol_t})"
         if opt == "クロス": return f"クロス ({c_vol_cr})"
         if opt == "逆クロス": return f"逆クロス ({c_vol_in})"
         return opt
     sel_vol_course = st.selectbox("ボレー コース", opt_vol_course_list, format_func=format_vol_c, key="f_vol_course")
 
-# スマッシュ - base_dfに連動
-c_sm_cr = len(base_df[base_df['has_smash_cross'] == True])
-c_sm_in = len(base_df[base_df['has_smash_inside'] == True])
+# 6. スマッシュ (df_stage3に連動)
+c_sm_cr = len(df_stage3[df_stage3['has_smash_cross'] == True])
+c_sm_in = len(df_stage3[df_stage3['has_smash_inside'] == True])
 
 opt_smash_list = ["すべて", "クロス", "逆クロス"]
 def format_smash(opt):
-    if opt == "すべて": return f"すべて ({base_count})"
+    if opt == "すべて": return f"すべて ({cnt_s3})"
     if opt == "クロス": return f"クロス ({c_sm_cr})"
     if opt == "逆クロス": return f"逆クロス ({c_sm_in})"
     return opt
@@ -323,42 +396,57 @@ sel_smash = st.sidebar.selectbox("スマッシュ コース", opt_smash_list, fo
 # ----------------------------------------------------
 # 最終フィルタ適用処理
 # ----------------------------------------------------
-cond = pd.Series(True, index=base_df.index)
+cond = pd.Series(True, index=df_stage3.index)
 
-if sel_finish != "すべて":
-    cond &= (base_df['Finish_Type'] == sel_finish)
-
-if sel_serve == "センター":
-    cond &= (base_df['has_serve_center'] == True)
-elif sel_serve == "ワイド":
-    cond &= (base_df['has_serve_wide'] == True)
-
+# ストローク条件
 if sel_gs_type == "フォア":
-    cond &= (base_df['has_stroke_fore'] == True)
+    if sel_gs_course == "クロス":
+        cond &= (df_stage3['has_stroke_fore_cross'] == True)
+    elif sel_gs_course == "逆クロス":
+        cond &= (df_stage3['has_stroke_fore_inside'] == True)
+    else:
+        cond &= (df_stage3['has_stroke_fore'] == True)
 elif sel_gs_type == "バック":
-    cond &= (base_df['has_stroke_back'] == True)
+    if sel_gs_course == "クロス":
+        cond &= (df_stage3['has_stroke_back_cross'] == True)
+    elif sel_gs_course == "逆クロス":
+        cond &= (df_stage3['has_stroke_back_inside'] == True)
+    else:
+        cond &= (df_stage3['has_stroke_back'] == True)
+else:
+    if sel_gs_course == "クロス":
+        cond &= (df_stage3['has_stroke_cross'] == True)
+    elif sel_gs_course == "逆クロス":
+        cond &= (df_stage3['has_stroke_inside'] == True)
 
-if sel_gs_course == "クロス":
-    cond &= (base_df['has_stroke_cross'] == True)
-elif sel_gs_course == "逆クロス":
-    cond &= (base_df['has_stroke_inside'] == True)
-
+# ボレー条件
 if sel_vol_type == "フォア":
-    cond &= (base_df['has_volley_fore'] == True)
+    if sel_vol_course == "クロス":
+        cond &= (df_stage3['has_volley_fore_cross'] == True)
+    elif sel_vol_course == "逆クロス":
+        cond &= (df_stage3['has_volley_fore_inside'] == True)
+    else:
+        cond &= (df_stage3['has_volley_fore'] == True)
 elif sel_vol_type == "バック":
-    cond &= (base_df['has_volley_back'] == True)
+    if sel_vol_course == "クロス":
+        cond &= (df_stage3['has_volley_back_cross'] == True)
+    elif sel_vol_course == "逆クロス":
+        cond &= (df_stage3['has_volley_back_inside'] == True)
+    else:
+        cond &= (df_stage3['has_volley_back'] == True)
+else:
+    if sel_vol_course == "クロス":
+        cond &= (df_stage3['has_volley_cross'] == True)
+    elif sel_vol_course == "逆クロス":
+        cond &= (df_stage3['has_volley_inside'] == True)
 
-if sel_vol_course == "クロス":
-    cond &= (base_df['has_volley_cross'] == True)
-elif sel_vol_course == "逆クロス":
-    cond &= (base_df['has_volley_inside'] == True)
-
+# スマッシュ条件
 if sel_smash == "クロス":
-    cond &= (base_df['has_smash_cross'] == True)
+    cond &= (df_stage3['has_smash_cross'] == True)
 elif sel_smash == "逆クロス":
-    cond &= (base_df['has_smash_inside'] == True)
+    cond &= (df_stage3['has_smash_inside'] == True)
 
-filtered_points = base_df[cond]
+filtered_points = df_stage3[cond]
 
 if filtered_points.empty:
     st.warning("⚠️ 選択した条件に一致するポイントがありません。フィルタ条件を緩和してください。")
