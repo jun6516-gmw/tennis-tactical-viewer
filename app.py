@@ -433,14 +433,35 @@ with col1:
 
 with col2:
     # ----------------------------------------------------
-    # コートの真上にナビゲーション操作バーを常時表示！
+    # スマホでも絶対に折り返さない1行ナビゲーションバー
     # ----------------------------------------------------
-    nav_c1, nav_c2, nav_c3 = st.columns([1.2, 2.2, 1.2])
+    # CSSで3要素の横並び配置を強制＆余白・ボタン高さを統一
+    st.markdown("""
+        <style>
+        div[data-testid="column"] {
+            min-width: 0 !important;
+        }
+        div[data-testid="stHorizontalBlock"] {
+            align-items: center !important;
+            flex-wrap: nowrap !important;
+            gap: 4px !important;
+        }
+        div[data-testid="stButton"] button {
+            padding: 2px 4px !important;
+            height: 38px !important;
+            font-size: 13px !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.8, 1])
+    
     with nav_c1:
         if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
             if st.session_state.current_point_idx > 0:
                 st.session_state.current_point_idx -= 1
                 st.rerun()
+
     with nav_c2:
         def on_main_select():
             chosen = st.session_state.main_pt_select
@@ -455,6 +476,7 @@ with col2:
             on_change=on_main_select,
             label_visibility="collapsed"
         )
+
     with nav_c3:
         if st.button("次へ ▶", use_container_width=True, key="main_next"):
             if st.session_state.current_point_idx < len(point_list) - 1:
@@ -462,7 +484,7 @@ with col2:
                 st.rerun()
 
     st.caption(f"該当: **{st.session_state.current_point_idx + 1} / {len(point_list)}** 件 (Point #{selected_point})")
-
+    
     # コート描画処理
     NET_Y = 11.885
     focal_shots = p_shots[p_shots['Player'] == target_player]
