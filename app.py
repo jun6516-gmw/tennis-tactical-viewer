@@ -418,7 +418,7 @@ def on_main_select():
         st.session_state.current_point_idx = point_list.index(chosen)
 
 # ----------------------------------------------------
-# ナビゲーション専用CSS（コート図との間の余白を極限まで詰める）
+# ナビゲーション & スマホ用コート図縮小CSS
 # ----------------------------------------------------
 st.markdown("""
 <style>
@@ -443,7 +443,7 @@ st.markdown("""
     gap: 6px !important;
     width: 100% !important;
     margin-top: 0px !important;
-    margin-bottom: -12px !important; /* コート図を上に引き上げる */
+    margin-bottom: -12px !important;
     padding-bottom: 0px !important;
 }
 
@@ -478,10 +478,24 @@ st.markdown("""
     font-weight: bold !important;
 }
 
-/* 4. コート図（画像/プロット）の上部余白を削る */
+/* コート図の上部余白を削る */
 [data-testid="stImage"], [data-testid="stPlotlyChart"], div.element-container:has(figure) {
     margin-top: 0px !important;
     padding-top: 0px !important;
+}
+
+/* ----------------------------------------------------
+   ★スマホ時（画面幅768px以下）のみコート図を70%に縮小
+   ---------------------------------------------------- */
+@media (max-width: 768px) {
+    /* コート図コンテナを幅70%にして中央寄せ */
+    [data-testid="stPlotlyChart"],
+    div.element-container:has(figure),
+    [data-testid="stImage"] {
+        width: 70% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
