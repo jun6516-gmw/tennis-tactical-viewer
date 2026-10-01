@@ -404,30 +404,40 @@ def on_main_select():
     if chosen in point_list:
         st.session_state.current_point_idx = point_list.index(chosen)
 
-# 1. ポイント選択ボックス（全幅）
-st.selectbox(
-    "Point # を選択",
-    options=point_list,
-    index=st.session_state.current_point_idx,
-    key="main_pt_select",
-    on_change=on_main_select
-)
+# ----------------------------------------------------
+# st.columns を使わずにボタンを直並べして横並びを強制
+# ----------------------------------------------------
+st.markdown("""
+<style>
+/* ボタンが入っている直近の親要素を横並びに固定 */
+div.st-key-main_prev, div.st-key-main_next {
+    display: inline-block !important;
+    width: auto !important;
+    margin-right: 8px !important;
+}
+div.st-key-main_prev button, div.st-key-main_next button {
+    width: auto !important;
+    min-width: 90px !important;
+    padding: 4px 12px !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# 2. 前後ボタン（全幅の直下なので、スマホでも絶対に改行されず横並び50%ずつになります）
-col_prev, col_next = st.columns(2)
-with col_prev:
-    if st.button("◀ 前へ", use_container_width=False, key="main_prev"):
-        if st.session_state.current_point_idx > 0:
-            st.session_state.current_point_idx -= 1
-            st.rerun()
+# カラムを使わずにそのまま並べて配置する
+btn_c = st.container()
+with btn_c:
+    p_clicked = st.button("◀ 前へ", key="main_prev")
+    n_clicked = st.button("次へ ▶", key="main_next")
 
-with col_next:
-    if st.button("次へ ▶", use_container_width=False, key="main_next"):
-        if st.session_state.current_point_idx < len(point_list) - 1:
-            st.session_state.current_point_idx += 1
-            st.rerun()
+if p_clicked:
+    if st.session_state.current_point_idx > 0:
+        st.session_state.current_point_idx -= 1
+        st.rerun()
 
-st.caption(f"該当: **{st.session_state.current_point_idx + 1} / {len(point_list)}** 件 (Point #{selected_point})")
+if n_clicked:
+    if st.session_state.current_point_idx < len(point_list) - 1:
+        st.session_state.current_point_idx += 1
+        st.rerun()
 
 # ----------------------------------------------------
 # ここから左右2分割（PC：左コート・右詳細 / スマホ：上コート・下詳細）
