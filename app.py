@@ -416,13 +416,13 @@ st.selectbox(
 # 2. 前後ボタン（全幅の直下なので、スマホでも絶対に改行されず横並び50%ずつになります）
 col_prev, col_next = st.columns(2)
 with col_prev:
-    if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
+    if st.button("◀ 前へ", use_container_width=False, key="main_prev"):
         if st.session_state.current_point_idx > 0:
             st.session_state.current_point_idx -= 1
             st.rerun()
 
 with col_next:
-    if st.button("次へ ▶", use_container_width=True, key="main_next"):
+    if st.button("次へ ▶", use_container_width=False, key="main_next"):
         if st.session_state.current_point_idx < len(point_list) - 1:
             st.session_state.current_point_idx += 1
             st.rerun()
