@@ -400,65 +400,59 @@ p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy
 p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
 
 # ----------------------------------------------------
-# スマホ画面内に3つをきっちり収める1行ナビゲーション
+# スマホ画面内に確実に収めるナビゲーション（最小幅の強制解除）
 # ----------------------------------------------------
 st.markdown("""
 <style>
-/* 操作バー全体のコンテナ幅を画面幅（100%）に固定してスクロールを禁止 */
+/* Streamlitがカラムに設定している最小幅（通常320px程度）を根本から0にする */
 div[data-testid="stHorizontalBlock"] {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
     width: 100% !important;
-    max-width: 100% !important;
     gap: 4px !important;
-    box-sizing: border-box !important;
-    overflow: hidden !important;
 }
 
-/* 左右ボタンは幅28%、中央セレクトは幅44%で画面内に固定 */
-div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(1) {
-    flex: 0 0 28% !important;
-    max-width: 28% !important;
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
     min-width: 0 !important;
+    flex: 1 1 0px !important;
+}
+
+/* 左右のボタンカラムはコンパクトに、中央のセレクトは広めに配分 */
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(1) {
+    flex: 1 1 0px !important;
 }
 div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) {
-    flex: 0 0 42% !important;
-    max-width: 42% !important;
-    min-width: 0 !important;
+    flex: 1.6 1 0px !important;
 }
 div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(3) {
-    flex: 0 0 28% !important;
-    max-width: 28% !important;
-    min-width: 0 !important;
+    flex: 1 1 0px !important;
 }
 
-/* ボタンの余白と高さを調整してはみ出し防止 */
+/* ボタンの文字サイズと余白をスマホ最適化 */
 div[data-testid="stButton"] button {
     width: 100% !important;
-    height: 38px !important;
-    padding: 0px 2px !important;
+    height: 40px !important;
+    padding: 0px 4px !important;
     font-size: 13px !important;
     font-weight: bold !important;
     white-space: nowrap !important;
 }
 
-/* セレクトボックスの余白と幅調整 */
+/* セレクトボックスの高さ合わせ */
 div[data-baseweb="select"] {
-    width: 100% !important;
-    min-height: 38px !important;
-    height: 38px !important;
+    height: 40px !important;
+    min-height: 40px !important;
 }
 div[data-baseweb="select"] > div {
-    min-height: 38px !important;
-    height: 38px !important;
+    height: 40px !important;
+    min-height: 40px !important;
     padding: 0px 4px !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ナビゲーション操作バー
 nav_c1, nav_c2, nav_c3 = st.columns([1, 1.6, 1])
 
 with nav_c1:
