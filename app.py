@@ -393,7 +393,7 @@ view_mode = st.sidebar.radio(
 )
 
 # ----------------------------------------------------
-# 【メイン画面】ナビゲーション（Point選択 ＋ 1行ボタン）
+# 【メイン画面】ナビゲーション（Point選択 ＋ コンパクトな1行ボタン）
 # ----------------------------------------------------
 selected_point = point_list[st.session_state.current_point_idx]
 p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
@@ -404,7 +404,7 @@ def on_main_select():
     if chosen in point_list:
         st.session_state.current_point_idx = point_list.index(chosen)
 
-# 1. ポイントNo. 選択（復活）
+# 1. ポイントNo. 選択
 st.selectbox(
     "Point # を選択",
     options=point_list,
@@ -413,41 +413,55 @@ st.selectbox(
     on_change=on_main_select
 )
 
-# 2. スマホの強制改行メディアクエリを打ち消すCSS
+# 2. ナビボタン専用のCSS（下のコートや概要のカラムには影響を与えない）
 st.markdown("""
 <style>
-/* スマホ幅でもボタン用カラムの改行（100%化）を打ち消し、横並びを維持 */
-@media (max-width: 768px) {
-    div[data-testid="stHorizontalBlock"] {
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 10px !important;
-    }
-    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-        flex: 1 1 0px !important;
-        min-width: 0 !important;
-        width: 50% !important;
-    }
+/* 操作ボタンを含むブロックだけをピンポイントで指定 */
+div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 12px !important;
+    width: auto !important;
+}
+
+/* ボタンのカラム幅を画面いっぱいに広げず、コンパクトに制限 */
+div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) > div[data-testid="column"] {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+/* ボタン自体のサイズ調整 */
+div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) button {
+    width: 110px !important;
+    height: 40px !important;
+    padding: 0px 8px !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    white-space: nowrap !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# 2つのボタンを並べる（スマホでも横並び50%ずつ、間延びしない設定）
-col_prev, col_next = st.columns(2)
+# 左右ボタン（use_container_width=False でコンパクトに）
+col_prev, col_next = st.columns([1, 1])
 
 with col_prev:
-    if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
+    if st.button("◀ 前へ", use_container_width=False, key="main_prev"):
         if st.session_state.current_point_idx > 0:
             st.session_state.current_point_idx -= 1
             st.rerun()
 
 with col_next:
-    if st.button("次へ ▶", use_container_width=True, key="main_next"):
+    if st.button("次へ ▶", use_container_width=False, key="main_next"):
         if st.session_state.current_point_idx < len(point_list) - 1:
             st.session_state.current_point_idx += 1
             st.rerun()
 
-# 3. 該当件数キャプション（復活）
+# 3. 該当件数キャプション
 st.caption(f"該当: **{st.session_state.current_point_idx + 1} / {len(point_list)}** 件 (Point #{selected_point})")
 
 # ----------------------------------------------------
