@@ -393,73 +393,51 @@ view_mode = st.sidebar.radio(
 )
 
 # ----------------------------------------------------
-# 【メイン画面】カラム順を反転（コートを第1カラムにする）
+# 【メイン画面】最上部にナビゲーション（ネストを完全解消して1行固定）
 # ----------------------------------------------------
 selected_point = point_list[st.session_state.current_point_idx]
 p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
 p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
 
-# PC時は [コート 1.1 : 情報 1.0] の比率で左右分割
-# 先に書いた col_court が PCでは左、スマホでは一番上に表示されます
+def on_main_select():
+    chosen = st.session_state.main_pt_select
+    if chosen in point_list:
+        st.session_state.current_point_idx = point_list.index(chosen)
+
+# 1. ポイント選択ボックス（全幅）
+st.selectbox(
+    "Point # を選択",
+    options=point_list,
+    index=st.session_state.current_point_idx,
+    key="main_pt_select",
+    on_change=on_main_select
+)
+
+# 2. 前後ボタン（全幅の直下なので、スマホでも絶対に改行されず横並び50%ずつになります）
+col_prev, col_next = st.columns(2)
+with col_prev:
+    if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
+        if st.session_state.current_point_idx > 0:
+            st.session_state.current_point_idx -= 1
+            st.rerun()
+
+with col_next:
+    if st.button("次へ ▶", use_container_width=True, key="main_next"):
+        if st.session_state.current_point_idx < len(point_list) - 1:
+            st.session_state.current_point_idx += 1
+            st.rerun()
+
+st.caption(f"該当: **{st.session_state.current_point_idx + 1} / {len(point_list)}** 件 (Point #{selected_point})")
+
+# ----------------------------------------------------
+# ここから左右2分割（PC：左コート・右詳細 / スマホ：上コート・下詳細）
+# ----------------------------------------------------
 col_court, col_info = st.columns([1.1, 1.0])
 
 # ====================================================
-# 【第1カラム】操作ナビゲーション ＆ コート描画（スマホでは最上部）
+# 【左側 / 上側】コート描画
 # ====================================================
 with col_court:
-    def on_main_select():
-        chosen = st.session_state.main_pt_select
-        if chosen in point_list:
-            st.session_state.current_point_idx = point_list.index(chosen)
-
-    # 1段目: ポイント選択
-    st.selectbox(
-        "Point # を選択",
-        options=point_list,
-        index=st.session_state.current_point_idx,
-        key="main_pt_select",
-        on_change=on_main_select
-    )
-
-# 「前へ」の後の改行を無くし、狭いボタン2つをぴったり横並びにする
-    st.markdown("""
-        <style>
-        /* 前へ・次へボタンの親コンテナを改行禁止（横並び）にする */
-        div[data-testid="stHorizontalBlock"]:has(button[key="main_prev"]) {
-            display: inline-flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            align-items: center !important;
-            gap: 12px !important;  /* ボタン同士の間隔 */
-            width: auto !important;
-        }
-        div[data-testid="stHorizontalBlock"]:has(button[key="main_prev"]) > div[data-testid="column"] {
-            width: auto !important;
-            min-width: 0 !important;
-            flex: 0 0 auto !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-    
-    # 2段目: 左右ボタン（2分割なのでスマホでも崩れず横並び）
-    col_prev, col_next = st.columns(2)
-    with col_prev:
-        # use_container_width=False にすると全幅に広がらず狭くなります
-        if st.button("◀ 前へ", use_container_width=False, key="main_prev"):
-            if st.session_state.current_point_idx > 0:
-                st.session_state.current_point_idx -= 1
-                st.rerun()
-
-    with col_next:
-        if st.button("次へ ▶", use_container_width=False, key="main_next"):
-            if st.session_state.current_point_idx < len(point_list) - 1:
-                st.session_state.current_point_idx += 1
-                st.rerun()
-
-    # 3段目: 件数キャプション
-    st.caption(f"該当: **{st.session_state.current_point_idx + 1} / {len(point_list)}** 件 (Point #{selected_point})")
-
-    # コート描画処理
     NET_Y = 11.885
     focal_shots = p_shots[p_shots['Player'] == target_player]
     is_far = False
@@ -585,6 +563,8 @@ with col_court:
     ax.axis('off')
 
     st.pyplot(fig, use_container_width=True)
+
+# （これ以降の with col_info: は元のままでOKです）
 
 # ====================================================
 # 【第2カラム】概要 ＆ ショット詳細（PCでは右側、スマホでは下側）
