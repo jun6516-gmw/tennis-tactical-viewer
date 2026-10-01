@@ -393,43 +393,114 @@ view_mode = st.sidebar.radio(
 )
 
 # ----------------------------------------------------
-# 【メイン画面】ナビゲーション（Point選択 ＋ コンパクトな1行ボタン）
+# 【メイン画面】ナビゲーション（案2完成版: 横1行コンパクト）
 # ----------------------------------------------------
-selected_point = point_list[st.session_state.current_point_idx]
-p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
-p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
+# 初期状態のセット
+if "current_point_idx" not in st.session_state or st.session_state.current_point_idx >= len(point_list):
+    st.session_state.current_point_idx = 0
+
+if "main_pt_select" not in st.session_state or st.session_state.main_pt_select not in point_list:
+    st.session_state.main_pt_select = point_list[st.session_state.current_point_idx]
+
+# --- コールバック関数（描画前に安全に連動同期） ---
+def go_prev_pt():
+    if st.session_state.current_point_idx > 0:
+        st.session_state.current_point_idx -= 1
+        st.session_state.main_pt_select = point_list[st.session_state.current_point_idx]
+
+def go_next_pt():
+    if st.session_state.current_point_idx < len(point_list) - 1:
+        st.session_state.current_point_idx += 1
+        st.session_state.main_pt_select = point_list[st.session_state.current_point_idx]
 
 def on_main_select():
     chosen = st.session_state.main_pt_select
     if chosen in point_list:
         st.session_state.current_point_idx = point_list.index(chosen)
 
-# 1. ポイントNo. 選択
-st.selectbox(
-    "Point # を選択",
-    options=point_list,
-    index=st.session_state.current_point_idx,
-    key="main_pt_select",
-    on_change=on_main_select
-)
+# ----------------------------------------------------
+# ナビゲーション専用CSS（コートや概要には一切影響を与えない）
+# ----------------------------------------------------
+st.markdown("""
+<style>
+/* ナビゲーションコンテナ内のブロックのみ横並び1行に固定 */
+div.nav-block div[data-testid="stHorizontalBlock"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: 100% !important;
+    margin-bottom: 8px !important;
+}
 
-# 2. 前後ボタン（CSSハック全廃：[1, 1, 1.8] の比率で左側にピタッとコンパクトに寄せる）
-col_prev, col_next, col_empty = st.columns([1, 1, 1.8])
+div.nav-block [data-testid="stColumn"], 
+div.nav-block [data-testid="column"] {
+    min-width: 0 !important;
+}
+
+/* 1番目(◀)と3番目(▶)のカラム: 48px固定 */
+div.nav-block div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:first-child,
+div.nav-block div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:last-child,
+div.nav-block div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child,
+div.nav-block div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:last-child {
+    flex: 0 0 48px !important;
+    width: 48px !important;
+    max-width: 48px !important;
+}
+
+/* 2番目(中央Point選択): 90px固定 */
+div.nav-block div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2),
+div.nav-block div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) {
+    flex: 0 0 90px !important;
+    width: 90px !important;
+    max-width: 90px !important;
+}
+
+/* ボタンサイズと高さの統一 */
+div.nav-block div[data-testid="stHorizontalBlock"] button {
+    height: 42px !important;
+    padding: 0 !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ----------------------------------------------------
+# ナビバー描画（nav-block で囲む）
+# ----------------------------------------------------
+st.markdown('<div class="nav-block">', unsafe_allow_html=True)
+col_prev, col_sel, col_next = st.columns([1, 6, 1])
 
 with col_prev:
-    if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
-        if st.session_state.current_point_idx > 0:
-            st.session_state.current_point_idx -= 1
-            st.rerun()
+    st.button("◀", key="main_prev", on_click=go_prev_pt, use_container_width=True)
+
+with col_sel:
+    st.selectbox(
+        "Point #",
+        options=point_list,
+        key="main_pt_select",
+        on_change=on_main_select,
+        label_visibility="collapsed"
+    )
 
 with col_next:
-    if st.button("次へ ▶", use_container_width=True, key="main_next"):
-        if st.session_state.current_point_idx < len(point_list) - 1:
-            st.session_state.current_point_idx += 1
-            st.rerun()
+    st.button("▶", key="main_next", on_click=go_next_pt, use_container_width=True)
 
-# 3. 該当件数キャプション
-st.caption(f"該当: **{st.session_state.current_point_idx + 1} / {len(point_list)}** 件 (Point #{selected_point})")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# 現在選択されているポイントのデータ抽出
+selected_point = point_list[st.session_state.current_point_idx]
+p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
+p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
+
+# ----------------------------------------------------
+# ここから左右2分割（PC：左コート・右詳細 / スマホ：上コート・下詳細）
+# ----------------------------------------------------
+col_court, col_info = st.columns([1.1, 1.0])
+
 # ----------------------------------------------------
 # ここから左右2分割（PC：左コート・右詳細 / スマホ：上コート・下詳細）
 # ----------------------------------------------------
