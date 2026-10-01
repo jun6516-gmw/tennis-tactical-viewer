@@ -393,7 +393,7 @@ view_mode = st.sidebar.radio(
 )
 
 # ----------------------------------------------------
-# 【メイン画面】最上部にナビゲーション（ネストを完全解消して1行固定）
+# 【メイン画面】ナビゲーション（Point選択 ＋ 1行ボタン）
 # ----------------------------------------------------
 selected_point = point_list[st.session_state.current_point_idx]
 p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
@@ -404,40 +404,51 @@ def on_main_select():
     if chosen in point_list:
         st.session_state.current_point_idx = point_list.index(chosen)
 
-# ----------------------------------------------------
-# st.columns を使わずにボタンを直並べして横並びを強制
-# ----------------------------------------------------
+# 1. ポイントNo. 選択（復活）
+st.selectbox(
+    "Point # を選択",
+    options=point_list,
+    index=st.session_state.current_point_idx,
+    key="main_pt_select",
+    on_change=on_main_select
+)
+
+# 2. スマホの強制改行メディアクエリを打ち消すCSS
 st.markdown("""
 <style>
-/* ボタンが入っている直近の親要素を横並びに固定 */
-div.st-key-main_prev, div.st-key-main_next {
-    display: inline-block !important;
-    width: auto !important;
-    margin-right: 8px !important;
-}
-div.st-key-main_prev button, div.st-key-main_next button {
-    width: auto !important;
-    min-width: 90px !important;
-    padding: 4px 12px !important;
+/* スマホ幅でもボタン用カラムの改行（100%化）を打ち消し、横並びを維持 */
+@media (max-width: 768px) {
+    div[data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 10px !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        flex: 1 1 0px !important;
+        min-width: 0 !important;
+        width: 50% !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
 
-# カラムを使わずにそのまま並べて配置する
-btn_c = st.container()
-with btn_c:
-    p_clicked = st.button("◀ 前へ", key="main_prev")
-    n_clicked = st.button("次へ ▶", key="main_next")
+# 2つのボタンを並べる（スマホでも横並び50%ずつ、間延びしない設定）
+col_prev, col_next = st.columns(2)
 
-if p_clicked:
-    if st.session_state.current_point_idx > 0:
-        st.session_state.current_point_idx -= 1
-        st.rerun()
+with col_prev:
+    if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
+        if st.session_state.current_point_idx > 0:
+            st.session_state.current_point_idx -= 1
+            st.rerun()
 
-if n_clicked:
-    if st.session_state.current_point_idx < len(point_list) - 1:
-        st.session_state.current_point_idx += 1
-        st.rerun()
+with col_next:
+    if st.button("次へ ▶", use_container_width=True, key="main_next"):
+        if st.session_state.current_point_idx < len(point_list) - 1:
+            st.session_state.current_point_idx += 1
+            st.rerun()
+
+# 3. 該当件数キャプション（復活）
+st.caption(f"該当: **{st.session_state.current_point_idx + 1} / {len(point_list)}** 件 (Point #{selected_point})")
 
 # ----------------------------------------------------
 # ここから左右2分割（PC：左コート・右詳細 / スマホ：上コート・下詳細）
