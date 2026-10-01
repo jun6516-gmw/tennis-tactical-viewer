@@ -421,6 +421,26 @@ with col_court:
         on_change=on_main_select
     )
 
+# 「前へ」の後の改行を無くし、狭いボタン2つをぴったり横並びにする
+    st.markdown("""
+        <style>
+        /* 前へ・次へボタンの親コンテナを改行禁止（横並び）にする */
+        div[data-testid="stHorizontalBlock"]:has(button[key="main_prev"]) {
+            display: inline-flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            gap: 12px !important;  /* ボタン同士の間隔 */
+            width: auto !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(button[key="main_prev"]) > div[data-testid="column"] {
+            width: auto !important;
+            min-width: 0 !important;
+            flex: 0 0 auto !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     # 2段目: 左右ボタン（2分割なのでスマホでも崩れず横並び）
     col_prev, col_next = st.columns(2)
     with col_prev:
