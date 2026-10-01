@@ -424,7 +424,8 @@ with col_court:
     # 2段目: 左右ボタン（2分割なのでスマホでも崩れず横並び）
     col_prev, col_next = st.columns(2)
     with col_prev:
-        if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
+        # use_container_width=False にすると全幅に広がらず狭くなります
+        if st.button("◀ 前へ", use_container_width=False, key="main_prev"):
             if st.session_state.current_point_idx > 0:
                 st.session_state.current_point_idx -= 1
                 st.rerun()
