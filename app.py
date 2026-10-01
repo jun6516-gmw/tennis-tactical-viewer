@@ -413,21 +413,24 @@ st.selectbox(
     on_change=on_main_select
 )
 
-# 2. ナビボタン専用のCSS（下のコートや概要のカラムには影響を与えない）
+# 2. ナビボタン専用のCSS（ボタン同士をギュッと寄せる）
 st.markdown("""
 <style>
-/* 操作ボタンを含むブロックだけをピンポイントで指定 */
+/* ボタンを含むブロック全体の幅を画面いっぱいに広げず、コンテンツ幅に縮める */
+div[data-testid="stHorizontalBlock"]:has(button[key="main_prev"]),
 div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) {
-    display: flex !important;
+    display: inline-flex !important;
+    width: auto !important;
+    max-width: fit-content !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
     justify-content: flex-start !important;
     align-items: center !important;
-    gap: 12px !important;
-    width: auto !important;
+    gap: 8px !important;  /* ボタン同士のすき間（お好みで調整可） */
 }
 
-/* ボタンのカラム幅を画面いっぱいに広げず、コンパクトに制限 */
+/* カラム自体の余白・幅をボタンサイズぴったりに固定 */
+div[data-testid="stHorizontalBlock"]:has(button[key="main_prev"]) > div[data-testid="column"],
 div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) > div[data-testid="column"] {
     flex: 0 0 auto !important;
     width: auto !important;
@@ -435,11 +438,12 @@ div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) > div[data-te
 }
 
 /* ボタン自体のサイズ調整 */
+div[data-testid="stHorizontalBlock"]:has(button[key="main_prev"]) button,
 div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) button {
-    width: 110px !important;
-    height: 40px !important;
+    width: 105px !important;
+    height: 38px !important;
     padding: 0px 8px !important;
-    font-size: 14px !important;
+    font-size: 13px !important;
     font-weight: bold !important;
     white-space: nowrap !important;
 }
