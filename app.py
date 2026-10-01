@@ -431,7 +431,7 @@ with col_court:
                 st.rerun()
 
     with col_next:
-        if st.button("次へ ▶", use_container_width=True, key="main_next"):
+        if st.button("次へ ▶", use_container_width=False, key="main_next"):
             if st.session_state.current_point_idx < len(point_list) - 1:
                 st.session_state.current_point_idx += 1
                 st.rerun()
