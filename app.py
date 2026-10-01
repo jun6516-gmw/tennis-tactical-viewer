@@ -400,55 +400,66 @@ p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy
 p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
 
 # ----------------------------------------------------
-# スマホでも絶対に1行を維持する強制横並びスタイル
+# スマホ画面内に3つをきっちり収める1行ナビゲーション
 # ----------------------------------------------------
 st.markdown("""
 <style>
-/* 操作バー専用の横並びコンテナ設定 */
+/* 操作バー全体のコンテナ幅を画面幅（100%）に固定してスクロールを禁止 */
 div[data-testid="stHorizontalBlock"] {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
-    gap: 6px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 4px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
 }
 
-/* スマホ幅でも各カラムの幅を維持（縦積みを無効化） */
-div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-    flex: 1 1 0px !important;
+/* 左右ボタンは幅28%、中央セレクトは幅44%で画面内に固定 */
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(1) {
+    flex: 0 0 28% !important;
+    max-width: 28% !important;
+    min-width: 0 !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) {
+    flex: 0 0 42% !important;
+    max-width: 42% !important;
+    min-width: 0 !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(3) {
+    flex: 0 0 28% !important;
+    max-width: 28% !important;
     min-width: 0 !important;
 }
 
-/* 中央のセレクトボックスを少し広くする */
-div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) {
-    flex: 1.8 1 0px !important;
-}
-
-/* ボタンの余白と高さを統一してタップしやすく調整 */
+/* ボタンの余白と高さを調整してはみ出し防止 */
 div[data-testid="stButton"] button {
-    height: 42px !important;
-    padding: 0px 4px !important;
+    width: 100% !important;
+    height: 38px !important;
+    padding: 0px 2px !important;
     font-size: 13px !important;
     font-weight: bold !important;
     white-space: nowrap !important;
 }
 
-/* セレクトボックスの高さも揃える */
+/* セレクトボックスの余白と幅調整 */
 div[data-baseweb="select"] {
-    min-height: 42px !important;
-    height: 42px !important;
+    width: 100% !important;
+    min-height: 38px !important;
+    height: 38px !important;
 }
 div[data-baseweb="select"] > div {
-    min-height: 42px !important;
-    height: 42px !important;
-    padding-top: 0px !important;
-    padding-bottom: 0px !important;
+    min-height: 38px !important;
+    height: 38px !important;
+    padding: 0px 4px !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ナビゲーション操作バー（◀ 前へ ｜ Point選択 ｜ 次へ ▶）
-nav_c1, nav_c2, nav_c3 = st.columns([1, 1.8, 1])
+# ナビゲーション操作バー
+nav_c1, nav_c2, nav_c3 = st.columns([1, 1.6, 1])
 
 with nav_c1:
     if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
