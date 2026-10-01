@@ -399,6 +399,54 @@ selected_point = point_list[st.session_state.current_point_idx]
 p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
 p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
 
+# ----------------------------------------------------
+# スマホでも絶対に1行を維持する強制横並びスタイル
+# ----------------------------------------------------
+st.markdown("""
+<style>
+/* 操作バー専用の横並びコンテナ設定 */
+div[data-testid="stHorizontalBlock"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+/* スマホ幅でも各カラムの幅を維持（縦積みを無効化） */
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+    flex: 1 1 0px !important;
+    min-width: 0 !important;
+}
+
+/* 中央のセレクトボックスを少し広くする */
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) {
+    flex: 1.8 1 0px !important;
+}
+
+/* ボタンの余白と高さを統一してタップしやすく調整 */
+div[data-testid="stButton"] button {
+    height: 42px !important;
+    padding: 0px 4px !important;
+    font-size: 13px !important;
+    font-weight: bold !important;
+    white-space: nowrap !important;
+}
+
+/* セレクトボックスの高さも揃える */
+div[data-baseweb="select"] {
+    min-height: 42px !important;
+    height: 42px !important;
+}
+div[data-baseweb="select"] > div {
+    min-height: 42px !important;
+    height: 42px !important;
+    padding-top: 0px !important;
+    padding-bottom: 0px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ナビゲーション操作バー（◀ 前へ ｜ Point選択 ｜ 次へ ▶）
 nav_c1, nav_c2, nav_c3 = st.columns([1, 1.8, 1])
 
