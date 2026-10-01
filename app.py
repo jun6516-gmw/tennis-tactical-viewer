@@ -413,69 +413,23 @@ st.selectbox(
     on_change=on_main_select
 )
 
-# 2. ナビボタン専用のCSS（ボタン同士をギュッと寄せる）
-st.markdown("""
-<style>
-/* カラム自体の幅をボタンのサイズ（105px）に固定して余白を消す */
-div[data-testid="stHorizontalBlock"]:has(button[key="main_prev"]) > div[data-testid="column"],
-div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) > div[data-testid="column"] {
-    flex: 0 0 105px !important;
-    width: 105px !important;
-    min-width: 0 !important;
-    max-width: 105px !important;
-}
-
-/* ボタン同士の間隔（0px または 4px程度） */
-div[data-testid="stHorizontalBlock"]:has(button[key="main_prev"]),
-div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    justify-content: flex-start !important;
-    align-items: center !important;
-    gap: 0px !important;  /* ここを 0px に設定 */
-    width: auto !important;
-}
-
-/* カラム自体の余白・幅をボタンサイズぴったりに固定 */
-div[data-testid="stHorizontalBlock"]:has(button[key="main_prev"]) > div[data-testid="column"],
-div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) > div[data-testid="column"] {
-    flex: 0 0 auto !important;
-    width: auto !important;
-    min-width: 0 !important;
-}
-
-/* ボタン自体のサイズ調整 */
-div[data-testid="stHorizontalBlock"]:has(button[key="main_prev"]) button,
-div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) button {
-    width: 105px !important;
-    height: 38px !important;
-    padding: 0px 8px !important;
-    font-size: 13px !important;
-    font-weight: bold !important;
-    white-space: nowrap !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# 左右ボタン（use_container_width=False でコンパクトに）
-col_prev, col_next = st.columns([1, 1])
+# 2. 前後ボタン（CSSハック全廃：[1, 1, 1.8] の比率で左側にピタッとコンパクトに寄せる）
+col_prev, col_next, col_empty = st.columns([1, 1, 1.8])
 
 with col_prev:
-    if st.button("◀ 前へ", use_container_width=False, key="main_prev"):
+    if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
         if st.session_state.current_point_idx > 0:
             st.session_state.current_point_idx -= 1
             st.rerun()
 
 with col_next:
-    if st.button("次へ ▶", use_container_width=False, key="main_next"):
+    if st.button("次へ ▶", use_container_width=True, key="main_next"):
         if st.session_state.current_point_idx < len(point_list) - 1:
             st.session_state.current_point_idx += 1
             st.rerun()
 
 # 3. 該当件数キャプション
 st.caption(f"該当: **{st.session_state.current_point_idx + 1} / {len(point_list)}** 件 (Point #{selected_point})")
-
 # ----------------------------------------------------
 # ここから左右2分割（PC：左コート・右詳細 / スマホ：上コート・下詳細）
 # ----------------------------------------------------
