@@ -17,7 +17,7 @@ for font in JP_FONTS:
         plt.rcParams['font.family'] = font
         break
 
-# ページ基本設定（タイトルテキスト類はスマホ画面を最大活用するため全撤去）
+# ページ基本設定（タイトル類は画面を有効活用するため全撤去）
 st.set_page_config(page_title="Tennis Match Tactical Visualizer", layout="wide")
 
 STROKE_MAP = {
@@ -399,89 +399,36 @@ selected_point = point_list[st.session_state.current_point_idx]
 p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
 p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
 
-# ----------------------------------------------------
-# スマホ画面内に確実に収めるナビゲーション（最小幅の強制解除）
-# ----------------------------------------------------
-st.markdown("""
-<style>
-/* Streamlitがカラムに設定している最小幅（通常320px程度）を根本から0にする */
-div[data-testid="stHorizontalBlock"] {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    width: 100% !important;
-    gap: 4px !important;
-}
+# --- 確実な縦積みナビゲーション（はみ出しなし） ---
+def on_main_select():
+    chosen = st.session_state.main_pt_select
+    if chosen in point_list:
+        st.session_state.current_point_idx = point_list.index(chosen)
 
-div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-    min-width: 0 !important;
-    flex: 1 1 0px !important;
-}
+# 1段目: ポイント選択
+st.selectbox(
+    "Point # を選択",
+    options=point_list,
+    index=st.session_state.current_point_idx,
+    key="main_pt_select",
+    on_change=on_main_select
+)
 
-/* 左右のボタンカラムはコンパクトに、中央のセレクトは広めに配分 */
-div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(1) {
-    flex: 1 1 0px !important;
-}
-div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) {
-    flex: 1.6 1 0px !important;
-}
-div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(3) {
-    flex: 1 1 0px !important;
-}
-
-/* ボタンの文字サイズと余白をスマホ最適化 */
-div[data-testid="stButton"] button {
-    width: 100% !important;
-    height: 40px !important;
-    padding: 0px 4px !important;
-    font-size: 13px !important;
-    font-weight: bold !important;
-    white-space: nowrap !important;
-}
-
-/* セレクトボックスの高さ合わせ */
-div[data-baseweb="select"] {
-    height: 40px !important;
-    min-height: 40px !important;
-}
-div[data-baseweb="select"] > div {
-    height: 40px !important;
-    min-height: 40px !important;
-    padding: 0px 4px !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-nav_c1, nav_c2, nav_c3 = st.columns([1, 1.6, 1])
-
-with nav_c1:
+# 2段目: 左右均等ボタン（2分割ならスマホでも100%横並びになります）
+col_prev, col_next = st.columns(2)
+with col_prev:
     if st.button("◀ 前へ", use_container_width=True, key="main_prev"):
         if st.session_state.current_point_idx > 0:
             st.session_state.current_point_idx -= 1
             st.rerun()
 
-with nav_c2:
-    def on_main_select():
-        chosen = st.session_state.main_pt_select
-        if chosen in point_list:
-            st.session_state.current_point_idx = point_list.index(chosen)
-    
-    st.selectbox(
-        "Point #",
-        options=point_list,
-        index=st.session_state.current_point_idx,
-        key="main_pt_select",
-        on_change=on_main_select,
-        label_visibility="collapsed"
-    )
-
-with nav_c3:
+with col_next:
     if st.button("次へ ▶", use_container_width=True, key="main_next"):
         if st.session_state.current_point_idx < len(point_list) - 1:
             st.session_state.current_point_idx += 1
             st.rerun()
 
+# 3段目: 該当件数キャプション
 st.caption(f"該当: **{st.session_state.current_point_idx + 1} / {len(point_list)}** 件 (Point #{selected_point})")
 
 # コート描画処理
