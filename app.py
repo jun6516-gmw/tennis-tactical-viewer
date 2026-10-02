@@ -50,31 +50,28 @@ uploaded_file = st.sidebar.file_uploader("SwingVisionファイルを選択 (.xls
 if uploaded_file is None:
     st.markdown("""
     <style>
-    /* デフォルト：サイドバーが開いている時（PC等） */
-    .msg-sidebar-open {
-        display: inline;
+    /* 1. デフォルト（PC画面：幅769px以上） */
+    .msg-pc {
+        display: inline !important;
     }
-    .msg-sidebar-closed {
-        display: none;
+    .msg-sp {
+        display: none !important;
     }
     
-    /* サイドバーが閉じている状態（スマホ時、またはPCで手動で閉じた時） */
-    /* Streamlit内部でサイドバーが閉じているコンテナ判定 */
-    [data-testid="stSidebar"][aria-expanded="false"] ~ section .msg-sidebar-open,
-    body:has([data-testid="stSidebar"][aria-expanded="false"]) .msg-sidebar-open,
-    @media (max-width: 992px) {
-        .msg-sidebar-open {
+    /* 2. スマホ・タブレット画面（幅768px以下） */
+    @media screen and (max-width: 768px) {
+        .msg-pc {
             display: none !important;
         }
-        .msg-sidebar-closed {
+        .msg-sp {
             display: inline !important;
         }
     }
     </style>
     
     <div style="background-color: #f0f7ff; color: #1e3a8a; padding: 14px 16px; border-radius: 8px; border-left: 5px solid #2563eb; margin: 10px 0;">
-        <span class="msg-sidebar-open">👈 <strong>左側のサイドバーから</strong></span>
-        <span class="msg-sidebar-closed">👆 <strong>上の ＞＞ をクリックして</strong></span>
+        <span class="msg-pc">👈 <strong>左側のサイドバーから</strong></span>
+        <span class="msg-sp">👆 <strong>上の ＞＞ をクリックして</strong></span>
         SwingVision のデータファイル（Excel または CSV）をアップロードしてください。
     </div>
     """, unsafe_allow_html=True)
