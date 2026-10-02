@@ -50,28 +50,26 @@ uploaded_file = st.sidebar.file_uploader("SwingVisionファイルを選択 (.xls
 if uploaded_file is None:
     st.markdown("""
     <style>
-    /* 1. デフォルト（PC画面：幅769px以上） */
+    /* 1. デフォルト（サイドバーが折りたたまれている時・スマホ表示時） */
     .msg-pc {
-        display: inline !important;
-    }
-    .msg-sp {
         display: none !important;
     }
+    .msg-sp {
+        display: inline !important;
+    }
     
-    /* 2. スマホ・タブレット画面（幅768px以下） */
-    @media screen and (max-width: 768px) {
-        .msg-pc {
-            display: none !important;
-        }
-        .msg-sp {
-            display: inline !important;
-        }
+    /* 2. サイドバーが開いて展開されている時（aria-expanded="true"）のみ「左側の〜」を表示 */
+    body:has([data-testid="stSidebar"][aria-expanded="true"]) .msg-pc {
+        display: inline !important;
+    }
+    body:has([data-testid="stSidebar"][aria-expanded="true"]) .msg-sp {
+        display: none !important;
     }
     </style>
     
     <div style="background-color: #f0f7ff; color: #1e3a8a; padding: 14px 16px; border-radius: 8px; border-left: 5px solid #2563eb; margin: 10px 0;">
         <span class="msg-pc">👈 <strong>左側のサイドバーから</strong></span>
-        <span class="msg-sp">👆 <strong>上の ＞＞ をクリックして</strong></span>
+        <span class="msg-sp">👆 <strong>上の >> をクリックして</strong></span>
         SwingVision のデータファイル（Excel または CSV）をアップロードしてください。
     </div>
     """, unsafe_allow_html=True)
