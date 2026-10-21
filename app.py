@@ -5,6 +5,27 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.font_manager as fm
 
+import matplotlib.colors as mcolors
+import numpy as np
+
+# ----------------------------------------------------
+# 打球速度に応じたカラーマップの定義
+# 0km/h: 白 -> 60km/h: 緑 -> 100km/h: 黄 -> 150km/h以上: 赤
+# ----------------------------------------------------
+speed_thresholds = [0, 60, 100, 150]
+colors_list = ["#ffffff", "#22c55e", "#eab308", "#ef4444"]
+
+positions = [s / 150.0 for s in speed_thresholds]
+cmap_dict = list(zip(positions, colors_list))
+ball_speed_cmap = mcolors.LinearSegmentedColormap.from_list("ball_speed_cmap", cmap_dict)
+
+def get_speed_color(speed_kmh):
+    """打球速度(km/h)から無段階のグラデーション色(HEX)を返す"""
+    if speed_kmh is None or np.isnan(speed_kmh) or speed_kmh <= 0:
+        return "#ffffff"
+    norm_val = np.clip(speed_kmh / 150.0, 0.0, 1.0)
+    return mcolors.to_hex(ball_speed_cmap(norm_val))
+
 # OS依存のないフォント設定
 JP_FONTS = [
     'Yu Gothic', 'Meiryo', 'MS Gothic',
