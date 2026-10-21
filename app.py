@@ -544,75 +544,28 @@ def on_main_select():
 # ----------------------------------------------------
 st.markdown("""
 <style>
+/* ページ最上部の余白 */
 .block-container {
-    padding-top: 3.5rem !important;
+    padding-top: 3.2rem !important;
     padding-bottom: 1rem !important;
 }
 
+/* 要素同士の縦方向の隙間を適度に調整 */
 [data-testid="stVerticalBlock"] {
-    gap: 0.3rem !important;
+    gap: 0.4rem !important;
 }
 
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    justify-content: flex-start !important;
-    align-items: center !important;
-    gap: 6px !important;
-    width: 100% !important;
-    margin-top: 0px !important;
-    margin-bottom: 2px !important;
-    padding-bottom: 0px !important;
-}
-
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) [data-testid="stColumn"],
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) [data-testid="column"] {
-    min-width: 0 !important;
-}
-
-/* 1番目(◀)と3番目(▶)のカラム: 48px固定 */
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:first-child,
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:first-child,
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(3),
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(3) {
-    flex: 0 0 44px !important;
-    width: 44px !important;
-    max-width: 44px !important;
-}
-
-/* 2番目(中央Point選択): 85px固定 */
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(2),
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(2) {
-    flex: 0 0 85px !important;
-    width: 85px !important;
-    max-width: 85px !important;
-}
-
-/* ★追加: 4番目(スコア表示): 残りの横幅全体を使って右寄せ表示 */
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(4),
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(4) {
-    flex: 1 1 auto !important;
-    display: flex !important;
-    align-items: center !important;
-}
-
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
-    height: 40px !important;
+/* ナビボタン(◀ ▶)の高さとフォント */
+div[data-testid="stColumn"] button {
+    height: 38px !important;
     padding: 0 !important;
     font-size: 16px !important;
     font-weight: bold !important;
 }
 
-[data-testid="stImage"], [data-testid="stPlotlyChart"], div.element-container:has(figure) {
-    margin-top: 0px !important;
-    padding-top: 0px !important;
-}
-
+/* スマホ時（幅768px以下）のみコート図を70%に縮小して中央寄せ */
 @media (max-width: 768px) {
-    [data-testid="stPlotlyChart"],
-    div.element-container:has(figure),
-    [data-testid="stImage"] {
+    div.element-container:has(figure) {
         width: 70% !important;
         margin-left: auto !important;
         margin-right: auto !important;
@@ -621,13 +574,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 現在選択されているポイントのデータを先に抽出
+# 現在選択されているポイントのデータを抽出
 selected_point = point_list[st.session_state.current_point_idx]
 p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
 p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
 
-# 4カラム横並び配置（◀, Point#, ▶, スコア）
-col_prev, col_sel, col_next, col_score = st.columns([1, 2, 1, 8])
+# 1段目: ナビゲーション（◀, Point#, ▶ をコンパクトに中央寄せ・左寄せ配置）
+col_prev, col_sel, col_next, _ = st.columns([1, 2, 1, 6])
 
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_pt, use_container_width=True)
@@ -644,14 +597,15 @@ with col_sel:
 with col_next:
     st.button("▶", key="main_next", on_click=go_next_pt, use_container_width=True)
 
-with col_score:
-    score_text = p_info['Display_Score']
-    outcome_badge = "🟢" if p_info['Point_Outcome'] == "取った" else "🔴"
-    st.markdown(f"""
-    <div style="font-size: 11px; color: #94a3b8; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 40px; margin-left: 6px;">
-        <span style="color: #f8fafc; font-weight: bold;">{score_text}</span> ｜ {outcome_badge}
-    </div>
-    """, unsafe_allow_html=True)
+# 2段目: スコア表示（ボタンの真下にすっきり1行で配置、コート図と完全に独立）
+score_text = p_info['Display_Score']
+outcome_badge = "🟢" if p_info['Point_Outcome'] == "取った" else "🔴"
+
+st.markdown(f"""
+<div style="font-size: 11px; color: #94a3b8; font-family: monospace; letter-spacing: 0.3px; padding: 2px 0 4px 2px; margin: 0;">
+    <span style="color: #f8fafc; font-weight: bold;">{score_text}</span> ｜ {outcome_badge}
+</div>
+""", unsafe_allow_html=True)
 
 # ----------------------------------------------------
 # 左右2分割（PC：左コート・右詳細 / スマホ：上コート・下詳細）
