@@ -650,10 +650,10 @@ with col_court:
 # ====================================================
 # 【右側 / 下側】概要 ＆ ショット詳細
 # ====================================================
+# ====================================================
+# 【右側 / 下側】概要 ＆ ショット詳細
+# ====================================================
 with col_info:
-    st.subheader(f"📌 Point {selected_point} 概要")
-    st.metric(label="ポイント勝敗", value=p_info['Point_Outcome'])
-
     # 選択ポイントまでのスコアを安全に計算
     pt_map_dict = {0: "0", 1: "15", 2: "30", 3: "40"}
     g_won, g_lost, p_won, p_lost = 0, 0, 0, 0
@@ -684,7 +684,10 @@ with col_info:
             g_lost += 1
             p_won, p_lost = 0, 0
 
-    st.write(f"**スコア:** {cur_score_str}")
+    # スコアを「Point 概要」の上の行に表示
+    st.write(f"### 🎾 スコア: {cur_score_str}")
+    st.subheader(f"📌 Point {selected_point} 概要")
+    st.metric(label="ポイント勝敗", value=p_info['Point_Outcome'])
     st.write(f"**ラリー打数:** {p_info['Total_Shots']} 打 ｜ **決まり方:** {p_info['Finish_Type']}")
     st.write(f"**決着展開:** {p_info['Detail']}")
     if p_info['Key_Category'] != 'なし':
