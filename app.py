@@ -644,7 +644,9 @@ with col_court:
         c = color_focal if cur['player'] == target_player else color_opp
         is_net = (cur['result'] == 'NET')
         target_x, target_y = cur['bx'], cur['by']
-        annotation_c = c
+        
+        # ★ 速度に応じたグラデーション色を取得
+        speed_color = get_speed_color(cur.get('speed', 0))
         
         # ネットミス延長処理
         if is_net:
@@ -653,13 +655,14 @@ with col_court:
             target_y = NET_Y
             if hy != by:
                 target_x = hx + (bx - hx) * (NET_Y - hy) / (by - hy)
-            annotation_c = color_net_miss
             
         ls_arrow = '-' if (cur['result'] == 'IN' or is_net) else '--'
+        
+        # ★ arrowprops の color を speed_color に変更
         ax.annotate(
             '', xy=(target_x, target_y), xytext=(cur['hx'], cur['hy']),
             arrowprops=dict(arrowstyle="->,head_width=0.35,head_length=0.5",
-                            color=annotation_c, lw=2.2, alpha=0.95, linestyle=ls_arrow)
+                            color=speed_color, lw=2.5, alpha=0.95, linestyle=ls_arrow)
         )
         
         # 打点マーク
