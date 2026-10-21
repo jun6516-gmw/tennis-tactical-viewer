@@ -5,6 +5,27 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.font_manager as fm
 
+import matplotlib.colors as mcolors
+import numpy as np
+
+# ----------------------------------------------------
+# 打球速度に応じたカラーマップの定義
+# 0km/h: 白 -> 60km/h: 緑 -> 100km/h: 黄 -> 150km/h以上: 赤
+# ----------------------------------------------------
+speed_thresholds = [0, 60, 100, 150]
+colors_list = ["#ffffff", "#22c55e", "#eab308", "#ef4444"]
+
+positions = [s / 150.0 for s in speed_thresholds]
+cmap_dict = list(zip(positions, colors_list))
+ball_speed_cmap = mcolors.LinearSegmentedColormap.from_list("ball_speed_cmap", cmap_dict)
+
+def get_speed_color(speed_kmh):
+    """打球速度(km/h)から無段階のグラデーション色(HEX)を返す"""
+    if speed_kmh is None or np.isnan(speed_kmh) or speed_kmh <= 0:
+        return "#ffffff"
+    norm_val = np.clip(speed_kmh / 150.0, 0.0, 1.0)
+    return mcolors.to_hex(ball_speed_cmap(norm_val))
+
 # OS依存のないフォント設定
 JP_FONTS = [
     'Yu Gothic', 'Meiryo', 'MS Gothic',
@@ -50,28 +71,26 @@ uploaded_file = st.sidebar.file_uploader("SwingVisionファイルを選択 (.xls
 if uploaded_file is None:
     st.markdown("""
     <style>
-    /* PC表示（デフォルト） */
+    /* 1. デフォルト（サイドバーが折りたたまれている時・スマホ表示時） */
     .msg-pc {
-        display: inline;
+        display: none !important;
     }
     .msg-sp {
-        display: none;
+        display: inline !important;
     }
     
-    /* スマホ表示（幅768px以下） */
-    @media (max-width: 768px) {
-        .msg-pc {
-            display: none !important;
-        }
-        .msg-sp {
-            display: inline !important;
-        }
+    /* 2. サイドバーが開いて展開されている時（aria-expanded="true"）のみ「左側の〜」を表示 */
+    body:has([data-testid="stSidebar"][aria-expanded="true"]) .msg-pc {
+        display: inline !important;
+    }
+    body:has([data-testid="stSidebar"][aria-expanded="true"]) .msg-sp {
+        display: none !important;
     }
     </style>
     
     <div style="background-color: #f0f7ff; color: #1e3a8a; padding: 14px 16px; border-radius: 8px; border-left: 5px solid #2563eb; margin: 10px 0;">
         <span class="msg-pc">👈 <strong>左側のサイドバーから</strong></span>
-        <span class="msg-sp">👆 <strong>上の ＞＞ をクリックして</strong></span>
+        <span class="msg-sp">👆 <strong>上の >> をクリックして</strong></span>
         SwingVision のデータファイル（Excel または CSV）をアップロードしてください。
     </div>
     """, unsafe_allow_html=True)
@@ -627,6 +646,9 @@ with col_court:
         target_x, target_y = cur['bx'], cur['by']
         annotation_c = c
         
+        # 速度に応じたグラデーション色を取得
+        speed_color = get_speed_color(cur.get('speed', 0))
+        
         # ネットミス延長処理
         if is_net:
             hx, hy = cur['hx'], cur['hy']
@@ -640,7 +662,7 @@ with col_court:
         ax.annotate(
             '', xy=(target_x, target_y), xytext=(cur['hx'], cur['hy']),
             arrowprops=dict(arrowstyle="->,head_width=0.35,head_length=0.5",
-                            color=annotation_c, lw=2.2, alpha=0.95, linestyle=ls_arrow)
+                            color=speed_color, lw=2.5, alpha=0.95, linestyle=ls_arrow)
         )
         
         # 打点マーク
