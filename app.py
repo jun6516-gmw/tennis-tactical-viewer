@@ -128,6 +128,52 @@ if not players:
 st.sidebar.header("👤 プレイヤー視点設定")
 target_player = st.sidebar.selectbox("手前側に固定するプレイヤーを選択", players, index=0)
 
+# ----------------------------------------------------
+# テニススコア（ゲーム・ポイント）の算出関数
+# ----------------------------------------------------
+POINT_STR_MAP = {0: "0", 1: "15", 2: "30", 3: "40"}
+
+def compute_point_scores(points_summary, focus_player):
+    """ポイントごとの手前側目線のスコアを計算してリストで返す"""
+    scores = []
+    games_won = 0
+    games_lost = 0
+    pts_won = 0
+    pts_lost = 0
+
+    for item in points_summary:
+        won = (item['Point_Outcome'] == "取った")
+
+        # 現在のゲーム内ポイント文字列
+        if pts_won >= 3 and pts_lost >= 3:
+            if pts_won == pts_lost:
+                pt_disp = "40-40 (Deuce)"
+            elif pts_won == pts_lost + 1:
+                pt_disp = "Ad-40"
+            else:
+                pt_disp = "40-Ad"
+        else:
+            pt_disp = f"{POINT_STR_MAP.get(pts_won, '40')}-{POINT_STR_MAP.get(pts_lost, '40')}"
+
+        game_disp = f"{games_won}-{games_lost}"
+        scores.append(f"Game {game_disp} ({pt_disp})")
+
+        # ポイント加算・ゲームカウント更新
+        if won:
+            pts_won += 1
+        else:
+            pts_lost += 1
+
+        # ゲーム決着判定
+        if pts_won >= 4 and pts_won - pts_lost >= 2:
+            games_won += 1
+            pts_won, pts_lost = 0, 0
+        elif pts_lost >= 4 and pts_lost - pts_won >= 2:
+            games_lost += 1
+            pts_won, pts_lost = 0, 0
+
+    return scores
+
 # ポイントサマリー & 手前選手のキーショット特定
 @st.cache_data
 def analyze_points_and_keyshots(df, focus_player):
@@ -233,6 +279,11 @@ def analyze_points_and_keyshots(df, focus_player):
             'Key_Type': shot_type,
             'Key_Course': shot_course
         })
+
+    scores = compute_point_scores(points_data, focus_player)
+    for idx, sc in enumerate(scores):
+        points_data[idx]['Score'] = sc
+    
     return pd.DataFrame(points_data)
 
 full_meta_df = analyze_points_and_keyshots(shots_df, target_player)
@@ -724,8 +775,10 @@ with col_court:
 # 【第2カラム】概要 ＆ ショット詳細（PCでは右側、スマホでは下側）
 # ====================================================
 with col_info:
+    with col_info:
     st.subheader(f"📌 Point {selected_point} 概要")
     st.metric(label="ポイント勝敗", value=p_info['Point_Outcome'])
+    st.write(f"**スコア:** {p_info['Score']}")
     st.write(f"**ラリー打数:** {p_info['Total_Shots']} 打 ｜ **決まり方:** {p_info['Finish_Type']}")
     st.write(f"**決着展開:** {p_info['Detail']}")
     if p_info['Key_Category'] != 'なし':
