@@ -650,44 +650,72 @@ with col_court:
 # ====================================================
 # 【右側 / 下側】概要 ＆ ショット詳細
 # ====================================================
-# ====================================================
-# 【右側 / 下側】概要 ＆ ショット詳細
-# ====================================================
-# ====================================================
-# 【右側 / 下側】概要 ＆ ショット詳細
-# ====================================================
 with col_info:
-    # 選択ポイントまでのスコアを安全に計算
+    # 選択ポイントまでのスコア（セット・ゲーム・ポイント/タイブレーク）を計算
     pt_map_dict = {0: "0", 1: "15", 2: "30", 3: "40"}
-    g_won, g_lost, p_won, p_lost = 0, 0, 0, 0
-    cur_score_str = "Game 0-0 (0-0)"
+    
+    sets_won, sets_lost = 0, 0
+    g_won, g_lost = 0, 0
+    p_won, p_lost = 0, 0
+    cur_score_str = "Set 0-0 | 0-0 (0-0)"
     
     history_pts = full_meta_df[full_meta_df['Point'] <= selected_point].sort_values('Point')
     for _, h_row in history_pts.iterrows():
-        if p_won >= 3 and p_lost >= 3:
-            if p_won == p_lost:
-                p_str = "40-40 (Deuce)"
-            elif p_won == p_lost + 1:
-                p_str = "Ad-40"
-            else:
-                p_str = "40-Ad"
+        is_tiebreak = (g_won == 6 and g_lost == 6)
+
+        # 現在のスコア表示文字列の作成
+        if is_tiebreak:
+            cur_score_str = f"Set {sets_won}-{sets_lost} | {g_won}-{g_lost} [TB {p_won}-{p_lost}]"
         else:
-            p_str = f"{pt_map_dict.get(p_won, '40')}-{pt_map_dict.get(p_lost, '40')}"
-        cur_score_str = f"Game {g_won}-{g_lost} ({p_str})"
-        
+            if p_won >= 3 and p_lost >= 3:
+                if p_won == p_lost:
+                    p_str = "40-40 (Deuce)"
+                elif p_won == p_lost + 1:
+                    p_str = "Ad-40"
+                else:
+                    p_str = "40-Ad"
+            else:
+                p_str = f"{pt_map_dict.get(p_won, '40')}-{pt_map_dict.get(p_lost, '40')}"
+            cur_score_str = f"Set {sets_won}-{sets_lost} | {g_won}-{g_lost} ({p_str})"
+
+        # 次のポイントへの加算
         if h_row['Point_Outcome'] == "取った":
             p_won += 1
         else:
             p_lost += 1
-            
-        if p_won >= 4 and p_won - p_lost >= 2:
-            g_won += 1
-            p_won, p_lost = 0, 0
-        elif p_lost >= 4 and p_lost - p_won >= 2:
-            g_lost += 1
-            p_won, p_lost = 0, 0
 
-    # すべて「ラリー打数」と同じ通常文字サイズに統一
+        # ゲームまたはタイブレークの決着判定
+        if is_tiebreak:
+            # 7ポイント先取＆2点差でタイブレーク獲得
+            if p_won >= 7 and p_won - p_lost >= 2:
+                g_won += 1
+                sets_won += 1
+                g_won, g_lost, p_won, p_lost = 0, 0, 0, 0
+            elif p_lost >= 7 and p_lost - p_won >= 2:
+                g_lost += 1
+                sets_lost += 1
+                g_won, g_lost, p_won, p_lost = 0, 0, 0, 0
+        else:
+            # 通常ゲーム（4点先取＆2点差）
+            game_won = (p_won >= 4 and p_won - p_lost >= 2)
+            game_lost = (p_lost >= 4 and p_lost - p_won >= 2)
+
+            if game_won:
+                g_won += 1
+                p_won, p_lost = 0, 0
+            elif game_lost:
+                g_lost += 1
+                p_won, p_lost = 0, 0
+
+            # 通常セット終了判定（6ゲーム以上かつ2ゲーム差、例: 6-4, 7-5）
+            if g_won >= 6 and g_won - g_lost >= 2:
+                sets_won += 1
+                g_won, g_lost = 0, 0
+            elif g_lost >= 6 and g_lost - g_won >= 2:
+                sets_lost += 1
+                g_won, g_lost = 0, 0
+
+    # すべて通常の文字サイズで表示
     st.write(f"**🎾 スコア:** {cur_score_str}")
     st.write(f"**📌 Point {selected_point} 概要**")
     st.write(f"**ポイント勝敗:** {p_info['Point_Outcome']}")
