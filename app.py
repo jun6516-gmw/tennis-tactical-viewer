@@ -69,21 +69,10 @@ uploaded_file = st.sidebar.file_uploader("SwingVisionファイルを選択 (.xls
 if uploaded_file is None:
     st.markdown("""
     <style>
-    /* 1. デフォルト（サイドバーが折りたたまれている時・スマホ表示時） */
-    .msg-pc {
-        display: none !important;
-    }
-    .msg-sp {
-        display: inline !important;
-    }
-    
-    /* 2. サイドバーが開いて展開されている時（aria-expanded="true"）のみ「左側の〜」を表示 */
-    body:has([data-testid="stSidebar"][aria-expanded="true"]) .msg-pc {
-        display: inline !important;
-    }
-    body:has([data-testid="stSidebar"][aria-expanded="true"]) .msg-sp {
-        display: none !important;
-    }
+    .msg-pc { display: none !important; }
+    .msg-sp { display: inline !important; }
+    body:has([data-testid="stSidebar"][aria-expanded="true"]) .msg-pc { display: inline !important; }
+    body:has([data-testid="stSidebar"][aria-expanded="true"]) .msg-sp { display: none !important; }
     </style>
     
     <div style="background-color: #f0f7ff; color: #1e3a8a; padding: 14px 16px; border-radius: 8px; border-left: 5px solid #2563eb; margin: 10px 0;">
@@ -126,47 +115,27 @@ if not players:
 st.sidebar.header("👤 プレイヤー視点設定")
 target_player = st.sidebar.selectbox("手前側に固定するプレイヤーを選択", players, index=0)
 
-# ----------------------------------------------------
-# サイドバー: マッチルール設定
-# ----------------------------------------------------
-st.sidebar.markdown("---")
-st.sidebar.header("⚙️ マッチルール設定")
-match_rule = st.sidebar.selectbox(
-    "マッチルール形式",
-    ["通常（3セットとも6オール7pt TB）", "ファイナル10ptスーパーTB（1セットオール時）"],
-    index=0
-)
-is_super_tb = (match_rule == "ファイナル10ptスーパーTB（1セットオール時）")
-
-# ポイントサマリー & スコア計算 & キーショット特定
+# ポイントサマリー & 手前選手のキーショット特定
 @st.cache_data
-def analyze_points_and_keyshots(df, focus_player, is_super_tb_mode=False):
+def analyze_points_and_keyshots(df, focus_player):
     points_data = []
-    point_ids = sorted(df['Point'].unique())
-
-    p_sets, o_sets = 0, 0
-    p_games, o_games = 0, 0
-    p_pts, o_pts = 0, 0
-    past_sets = []
-
-    pt_labels = ["0", "15", "30", "40"]
-
-    for point_id in point_ids:
-        group = df[df['Point'] == point_id]
+    grouped = df.groupby('Point')
+    
+    for point_id, group in grouped:
         group_sorted = group.sort_values('Shot')
         last_shot = group_sorted.iloc[-1]
-
+        
         last_player = str(last_shot['Player'])
         last_stroke = translate_stroke(last_shot['Stroke'])
         last_res = translate_result(last_shot['Result'])
         total_shots = len(group_sorted)
-
-        # 勝敗判定
+        
+        # ポイント勝敗
         if last_player == focus_player:
             point_outcome = "取った" if last_res == "IN" else "落とした"
         else:
             point_outcome = "取った" if last_res in ["OUT", "NET"] else "落とした"
-
+            
         # 決まり方
         if last_res == "OUT":
             finish_type = "アウト"
@@ -176,84 +145,7 @@ def analyze_points_and_keyshots(df, focus_player, is_super_tb_mode=False):
             finish_type = "エース"
         else:
             finish_type = "その他"
-
-        # スコア状態判定
-        current_set_num = p_sets + o_sets + 1
-        is_final_super_tb = is_super_tb_mode and (p_sets == 1 and o_sets == 1)
-        is_normal_tb = (not is_final_super_tb) and (p_games == 6 and o_games == 6)
-
-        if is_final_super_tb or is_normal_tb:
-            pt_score_str = f"TB {p_pts}-{o_pts}"
-        else:
-            if p_pts >= 3 and o_pts >= 3:
-                if p_pts == o_pts:
-                    pt_score_str = "40-40 (Deuce)"
-                elif p_pts == o_pts + 1:
-                    pt_score_str = "Ad-40"
-                elif o_pts == p_pts + 1:
-                    pt_score_str = "40-Ad"
-                else:
-                    pt_score_str = "40-40"
-            else:
-                pl = pt_labels[p_pts] if p_pts < 4 else "40"
-                ol = pt_labels[o_pts] if o_pts < 4 else "40"
-                pt_score_str = f"{pl}-{ol}"
-
-        past_sets_str = " ".join([f"{ps}-{os}" for ps, os in past_sets])
-        if is_final_super_tb:
-            score_disp = f"Set {current_set_num} [Match TB]: {pt_score_str}"
-        else:
-            score_disp = f"Set {current_set_num} ({p_games}-{o_games}) {pt_score_str}"
-
-        full_score_summary = f"{past_sets_str + ' ' if past_sets_str else ''}{score_disp}".strip()
-
-        # 次ポイントへの更新
-        if point_outcome == "取った":
-            p_pts += 1
-        else:
-            o_pts += 1
-
-        if is_final_super_tb:
-            if p_pts >= 10 and p_pts >= o_pts + 2:
-                p_sets += 1
-                past_sets.append((f"[{p_pts}", f"{o_pts}]"))
-                p_pts, o_pts = 0, 0
-            elif o_pts >= 10 and o_pts >= p_pts + 2:
-                o_sets += 1
-                past_sets.append((f"[{p_pts}", f"{o_pts}]"))
-                p_pts, o_pts = 0, 0
-        elif is_normal_tb:
-            if p_pts >= 7 and p_pts >= o_pts + 2:
-                p_games += 1
-                p_sets += 1
-                past_sets.append((p_games, o_games))
-                p_games, o_games, p_pts, o_pts = 0, 0, 0, 0
-            elif o_pts >= 7 and o_pts >= p_pts + 2:
-                o_games += 1
-                o_sets += 1
-                past_sets.append((p_games, o_games))
-                p_games, o_games, p_pts, o_pts = 0, 0, 0, 0
-        else:
-            game_won = None
-            if p_pts >= 4 and p_pts >= o_pts + 2:
-                p_games += 1
-                game_won = True
-                p_pts, o_pts = 0, 0
-            elif o_pts >= 4 and o_pts >= p_pts + 2:
-                o_games += 1
-                game_won = False
-                p_pts, o_pts = 0, 0
-
-            if game_won is not None:
-                if (p_games >= 6 and p_games >= o_games + 2) or p_games == 7:
-                    p_sets += 1
-                    past_sets.append((p_games, o_games))
-                    p_games, o_games = 0, 0
-                elif (o_games >= 6 and o_games >= p_games + 2) or o_games == 7:
-                    o_sets += 1
-                    past_sets.append((p_games, o_games))
-                    p_games, o_games = 0, 0
-
+            
         # キーショット判定
         key_shot_row = None
         if point_outcome == "取った":
@@ -276,17 +168,17 @@ def analyze_points_and_keyshots(df, focus_player, is_super_tb_mode=False):
         shot_category = "なし"
         shot_type = "なし"
         shot_course = "なし"
-
+        
         if key_shot_row is not None:
             stk = str(key_shot_row.get('Stroke', ''))
             dir_val = str(key_shot_row.get('Direction', ''))
             stk_clean = stk.lower().strip()
             dir_clean = dir_val.lower().strip()
-
+            
             is_serve = ('サーブ' in stk or 'serve' in stk_clean)
             is_volley = ('ボレー' in stk or 'volley' in stk_clean)
             is_smash = ('スマッシュ' in stk or 'smash' in stk_clean)
-
+            
             course_val = "その他"
             if 'クロス' in dir_val or 'cross' in dir_clean:
                 course_val = "クロス"
@@ -315,7 +207,6 @@ def analyze_points_and_keyshots(df, focus_player, is_super_tb_mode=False):
 
         points_data.append({
             'Point': int(point_id),
-            'Display_Score': full_score_summary,
             'Total_Shots': total_shots,
             'Point_Outcome': point_outcome,
             'Finish_Type': finish_type,
@@ -329,12 +220,11 @@ def analyze_points_and_keyshots(df, focus_player, is_super_tb_mode=False):
         })
     return pd.DataFrame(points_data)
 
-full_meta_df = analyze_points_and_keyshots(shots_df, target_player, is_super_tb)
+full_meta_df = analyze_points_and_keyshots(shots_df, target_player)
 
 # ----------------------------------------------------
 # サイドバー: 段階連動型フィルタUI
 # ----------------------------------------------------
-st.sidebar.markdown("---")
 st.sidebar.header("🔍 フィルタ設定")
 
 c_all = len(full_meta_df)
@@ -502,7 +392,7 @@ if final_df.empty:
 
 point_list = final_df['Point'].tolist()
 
-filter_signature = f"{sel_point}_{sel_finish}_{sel_serve}_{sel_gs_type}_{sel_gs_course}_{sel_vol_type}_{sel_vol_course}_{sel_smash}_{match_rule}"
+filter_signature = f"{sel_point}_{sel_finish}_{sel_serve}_{sel_gs_type}_{sel_gs_course}_{sel_vol_type}_{sel_vol_course}_{sel_smash}"
 if "last_filter_signature" not in st.session_state or st.session_state.last_filter_signature != filter_signature:
     st.session_state.last_filter_signature = filter_signature
     st.session_state.current_point_idx = 0
@@ -540,30 +430,65 @@ def on_main_select():
         st.session_state.current_point_idx = point_list.index(chosen)
 
 # ----------------------------------------------------
-# ナビゲーション & スマホ用コート図縮小CSS
+# 以前の安定したレイアウトCSS
 # ----------------------------------------------------
 st.markdown("""
 <style>
-/* ページ最上部の余白 */
 .block-container {
-    padding-top: 3.2rem !important;
+    padding-top: 3.5rem !important;
     padding-bottom: 1rem !important;
 }
 
-/* 要素同士の縦方向の隙間を適度に調整 */
 [data-testid="stVerticalBlock"] {
-    gap: 0.4rem !important;
+    gap: 0.3rem !important;
 }
 
-/* ナビボタン(◀ ▶)の高さとフォント */
-div[data-testid="stColumn"] button {
-    height: 38px !important;
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: 100% !important;
+    margin-top: 0px !important;
+    margin-bottom: 0px !important;
+    padding-bottom: 0px !important;
+}
+
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) [data-testid="stColumn"],
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) [data-testid="column"] {
+    min-width: 0 !important;
+}
+
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:first-child,
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:last-child,
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:first-child,
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:last-child {
+    flex: 0 0 48px !important;
+    width: 48px !important;
+    max-width: 48px !important;
+}
+
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(2),
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(2) {
+    flex: 0 0 90px !important;
+    width: 90px !important;
+    max-width: 90px !important;
+}
+
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
+    height: 40px !important;
     padding: 0 !important;
     font-size: 16px !important;
     font-weight: bold !important;
 }
 
-/* スマホ時（幅768px以下）のみコート図を70%に縮小して中央寄せ */
+[data-testid="stImage"], [data-testid="stPlotlyChart"], div.element-container:has(figure) {
+    margin-top: 0px !important;
+    padding-top: 0px !important;
+}
+
 @media (max-width: 768px) {
     div.element-container:has(figure) {
         width: 70% !important;
@@ -574,13 +499,8 @@ div[data-testid="stColumn"] button {
 </style>
 """, unsafe_allow_html=True)
 
-# 現在選択されているポイントのデータを抽出
-selected_point = point_list[st.session_state.current_point_idx]
-p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
-p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
-
-# 1段目: ナビゲーション（◀, Point#, ▶ をコンパクトに中央寄せ・左寄せ配置）
-col_prev, col_sel, col_next, _ = st.columns([1, 2, 1, 6])
+# ナビゲーション 3カラム
+col_prev, col_sel, col_next = st.columns([1, 6, 1])
 
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_pt, use_container_width=True)
@@ -597,23 +517,15 @@ with col_sel:
 with col_next:
     st.button("▶", key="main_next", on_click=go_next_pt, use_container_width=True)
 
-# 2段目: スコア表示（ボタンの真下にすっきり1行で配置、コート図と完全に独立）
-score_text = p_info['Display_Score']
-outcome_badge = "🟢" if p_info['Point_Outcome'] == "取った" else "🔴"
+selected_point = point_list[st.session_state.current_point_idx]
+p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
+p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
 
-st.markdown(f"""
-<div style="font-size: 11px; color: #94a3b8; font-family: monospace; letter-spacing: 0.3px; padding: 2px 0 4px 2px; margin: 0;">
-    <span style="color: #f8fafc; font-weight: bold;">{score_text}</span> ｜ {outcome_badge}
-</div>
-""", unsafe_allow_html=True)
-
-# ----------------------------------------------------
 # 左右2分割（PC：左コート・右詳細 / スマホ：上コート・下詳細）
-# ----------------------------------------------------
 col_court, col_info = st.columns([1.1, 1.0])
 
 # ====================================================
-# 【コート描画】
+# 【コート描画】（球速グラデーション維持）
 # ====================================================
 with col_court:
     NET_Y = 11.885
@@ -670,6 +582,7 @@ with col_court:
         target_x, target_y = cur['bx'], cur['by']
         annotation_c = c
 
+        # 速度グラデーション色を取得
         speed_color = get_speed_color(cur.get('speed', 0))
 
         if is_net:
