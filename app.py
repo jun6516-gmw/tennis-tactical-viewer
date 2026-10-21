@@ -562,7 +562,7 @@ st.markdown("""
     gap: 6px !important;
     width: 100% !important;
     margin-top: 0px !important;
-    margin-bottom: -12px !important;
+    margin-bottom: 2px !important;
     padding-bottom: 0px !important;
 }
 
@@ -640,7 +640,7 @@ score_text = p_info['Display_Score']
 outcome_badge = "🟢 得点" if p_info['Point_Outcome'] == "取った" else "🔴 失点"
 
 st.markdown(f"""
-<div style="font-size: 11px; color: #94a3b8; font-family: monospace; letter-spacing: 0.3px; margin-top: 3px; margin-bottom: 2px;">
+<div style="font-size: 11px; color: #94a3b8; font-family: monospace; letter-spacing: 0.3px; margin: 4px 0 6px 0; clear: both; line-height: 1.2;">
     <span style="color: #f8fafc; font-weight: bold;">{score_text}</span> ｜ {outcome_badge}
 </div>
 """, unsafe_allow_html=True)
