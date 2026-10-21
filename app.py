@@ -653,6 +653,9 @@ with col_court:
 # ====================================================
 # 【右側 / 下側】概要 ＆ ショット詳細
 # ====================================================
+# ====================================================
+# 【右側 / 下側】概要 ＆ ショット詳細
+# ====================================================
 with col_info:
     # 選択ポイントまでのスコアを安全に計算
     pt_map_dict = {0: "0", 1: "15", 2: "30", 3: "40"}
@@ -684,17 +687,17 @@ with col_info:
             g_lost += 1
             p_won, p_lost = 0, 0
 
-    # スコアを「Point 概要」の上の行に表示
-    st.write(f"### 🎾 スコア: {cur_score_str}")
-    st.subheader(f"📌 Point {selected_point} 概要")
-    st.metric(label="ポイント勝敗", value=p_info['Point_Outcome'])
+    # すべて「ラリー打数」と同じ通常文字サイズに統一
+    st.write(f"**🎾 スコア:** {cur_score_str}")
+    st.write(f"**📌 Point {selected_point} 概要**")
+    st.write(f"**ポイント勝敗:** {p_info['Point_Outcome']}")
     st.write(f"**ラリー打数:** {p_info['Total_Shots']} 打 ｜ **決まり方:** {p_info['Finish_Type']}")
     st.write(f"**決着展開:** {p_info['Detail']}")
     if p_info['Key_Category'] != 'なし':
         st.write(f"**手前のキーショット:** {p_info['Key_Category']} ({p_info['Key_Type']} / {p_info['Key_Course']})")
 
     st.write("---")
-    st.write("##### ショット詳細")
+    st.write("**ショット詳細**")
     display_df = p_shots.copy()
     display_df['Stroke'] = display_df['Stroke'].apply(translate_stroke)
     display_df['Result'] = display_df['Result'].apply(translate_result)
