@@ -621,8 +621,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ナビゲーション 3カラム
-col_prev, col_sel, col_next = st.columns([1, 6, 1])
+# 現在選択されているポイントのデータを先に抽出
+selected_point = point_list[st.session_state.current_point_idx]
+p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
+p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
+
+# 4カラム横並び配置（◀, Point#, ▶, スコア）
+col_prev, col_sel, col_next, col_score = st.columns([1, 2, 1, 8])
 
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_pt, use_container_width=True)
@@ -639,21 +644,14 @@ with col_sel:
 with col_next:
     st.button("▶", key="main_next", on_click=go_next_pt, use_container_width=True)
 
-selected_point = point_list[st.session_state.current_point_idx]
-p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
-p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
-
-# ----------------------------------------------------
-# 極小スコア表示（SCORE: ラベルなし・11px）
-# ----------------------------------------------------
-score_text = p_info['Display_Score']
-outcome_badge = "🟢 得点" if p_info['Point_Outcome'] == "取った" else "🔴 失点"
-
-st.markdown(f"""
-<div style="font-size: 11px; color: #94a3b8; font-family: monospace; letter-spacing: 0.3px; margin: 4px 0 6px 0; clear: both; line-height: 1.2;">
-    <span style="color: #f8fafc; font-weight: bold;">{score_text}</span> ｜ {outcome_badge}
-</div>
-""", unsafe_allow_html=True)
+with col_score:
+    score_text = p_info['Display_Score']
+    outcome_badge = "🟢" if p_info['Point_Outcome'] == "取った" else "🔴"
+    st.markdown(f"""
+    <div style="font-size: 11px; color: #94a3b8; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 40px; margin-left: 6px;">
+        <span style="color: #f8fafc; font-weight: bold;">{score_text}</span> ｜ {outcome_badge}
+    </div>
+    """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
 # 左右2分割（PC：左コート・右詳細 / スマホ：上コート・下詳細）
