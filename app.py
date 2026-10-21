@@ -683,11 +683,32 @@ with col_info:
             
         first_s = p_shots_sub.iloc[0]
         server = first_s['Player']
-        is_first_fault = (len(p_shots_sub) == 1 and 'first_serve' in str(first_s.get('Type', '')) and first_s['Result'] in ['ネット', 'アウト'])
         
+        # 1. ファーストサーブのフォールト判定
+        is_first_fault = (
+            len(p_shots_sub) == 1 and 
+            'first_serve' in str(first_s.get('Type', '')) and 
+            first_s['Result'] in ['ネット', 'アウト']
+        )
+        
+        # 2. レット（入ったが10秒程度でセカンドサーブが打ち直された無効打球）判定
+        is_let = False
+        if len(p_shots_sub) == 1 and 'サーブ' in str(first_s['Stroke']) and first_s['Result'] == 'イン':
+            # 次のポイントの情報を確認
+            future_pts = full_meta_df[full_meta_df['Point'] > p_id].sort_values('Point')
+            if not future_pts.empty:
+                next_pid = future_pts.iloc[0]['Point']
+                next_shots = shots_df[shots_df['Point'] == next_pid].sort_values('Shot')
+                if not next_shots.empty:
+                    next_first = next_shots.iloc[0]
+                    dt = next_first['Video Time'] - first_s['Video Time']
+                    if (dt < 15.0 and 
+                        next_first['Player'] == server and 
+                        'second_serve' in str(next_first.get('Type', ''))):
+                        is_let = True
+
         # サーバーが変わったらゲーム終了とみなしてゲームカウントを更新
         if cur_server is not None and server != cur_server:
-            # 前のゲームを取った方を判定（直前でリードしていた側、同点なら直前ポイント獲得者）
             if p_won > p_lost:
                 g_won += 1
             elif p_lost > p_won:
@@ -725,11 +746,16 @@ with col_info:
             else:
                 pt_display = f"({pt_map_dict.get(p_won, '40')}-{pt_map_dict.get(p_lost, '40')})"
                 
-        fault_tag = " [1st Fault]" if is_first_fault else ""
-        cur_score_str = f"Set {sets_won}-{sets_lost} | Game {g_won}-{g_lost} {pt_display}{fault_tag}"
+        status_tag = ""
+        if is_first_fault:
+            status_tag = " [1st Fault]"
+        elif is_let:
+            status_tag = " [Let]"
 
-        # ファーストサーブのフォールト以外はポイントを加算
-        if not is_first_fault:
+        cur_score_str = f"Set {sets_won}-{sets_lost} | Game {g_won}-{g_lost} {pt_display}{status_tag}"
+
+        # 1stフォールトまたはレット以外の場合のみポイントを加算
+        if not is_first_fault and not is_let:
             if h_row['Point_Outcome'] == "取った":
                 p_won += 1
             else:
