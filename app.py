@@ -571,20 +571,30 @@ st.markdown("""
     min-width: 0 !important;
 }
 
+/* 1番目(◀)と3番目(▶)のカラム: 48px固定 */
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:first-child,
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:last-child,
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:first-child,
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:last-child {
-    flex: 0 0 48px !important;
-    width: 48px !important;
-    max-width: 48px !important;
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(3),
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(3) {
+    flex: 0 0 44px !important;
+    width: 44px !important;
+    max-width: 44px !important;
 }
 
+/* 2番目(中央Point選択): 85px固定 */
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(2),
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(2) {
-    flex: 0 0 90px !important;
-    width: 90px !important;
-    max-width: 90px !important;
+    flex: 0 0 85px !important;
+    width: 85px !important;
+    max-width: 85px !important;
+}
+
+/* ★追加: 4番目(スコア表示): 残りの横幅全体を使って右寄せ表示 */
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(4),
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(4) {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    align-items: center !important;
 }
 
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
