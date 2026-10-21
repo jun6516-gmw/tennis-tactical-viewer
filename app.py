@@ -106,13 +106,134 @@ if missing_cols:
     st.error(f"必要なカラムが見つかりません: {missing_cols}")
     st.stop()
 
+# ----------------------------------------------------
+# ノイズ（Shot 0 やサーブ以外から始まる返球等）を事前除外
+# ----------------------------------------------------
+valid_point_ids = []
+for p_id, grp in shots_df.groupby('Point'):
+    first_row = grp.sort_values('Shot').iloc[0]
+    if first_row['Shot'] == 1 and 'サーブ' in str(first_row['Stroke']):
+        valid_point_ids.append(p_id)
+
+shots_df = shots_df[shots_df['Point'].isin(valid_point_ids)].copy()
+
 players = [p for p in shots_df['Player'].dropna().unique().tolist() if str(p).strip()]
 if not players:
-    st.error("Playerデータが存在しません。")
+    st.error("有効なPlayerデータが存在しません。")
     st.stop()
 
 st.sidebar.header("👤 プレイヤー視点設定")
 target_player = st.sidebar.selectbox("手前側に固定するプレイヤーを選択", players, index=0)
+
+# ----------------------------------------------------
+# 第1ポイントから順に追跡してスコアを算出する関数
+# ----------------------------------------------------
+PT_MAP = {0: "0", 1: "15", 2: "30", 3: "40"}
+
+def compute_all_match_scores(raw_shots_df, points_summary, focus_player):
+    scores = []
+    sets_won, sets_lost = 0, 0
+    g_won, g_lost = 0, 0
+    p_won, p_lost = 0, 0
+    cur_server = None
+    prev_outcome = "取った"
+
+    for idx, item in enumerate(points_summary):
+        p_id = item['Point']
+        p_shots = raw_shots_df[raw_shots_df['Point'] == p_id].sort_values('Shot')
+        if p_shots.empty:
+            scores.append("Set 0-0 | Game 0-0 (0-0)")
+            continue
+
+        first_s = p_shots.iloc[0]
+        server = str(first_s['Player'])
+
+        # 1. ファーストサーブ・フォールト判定
+        is_first_fault = (
+            len(p_shots) == 1 and 
+            'first_serve' in str(first_s.get('Type', '')) and 
+            first_s['Result'] in ['ネット', 'アウト']
+        )
+
+        # 2. レット判定（1打のみイン、15秒以内に同一サーバーが再サーブ）
+        is_let = False
+        if len(p_shots) == 1 and 'サーブ' in str(first_s['Stroke']) and first_s['Result'] == 'イン':
+            if idx + 1 < len(points_summary):
+                next_pid = points_summary[idx + 1]['Point']
+                next_shots = raw_shots_df[raw_shots_df['Point'] == next_pid].sort_values('Shot')
+                if not next_shots.empty:
+                    next_first = next_shots.iloc[0]
+                    if 'Video Time' in next_first and 'Video Time' in first_s:
+                        dt = next_first['Video Time'] - first_s['Video Time']
+                        if dt < 15.0 and next_first['Player'] == server and 'second_serve' in str(next_first.get('Type', '')):
+                            is_let = True
+
+        # 3. サーバー交代によるゲーム更新（タイブレーク中以外）
+        is_tiebreak = (g_won == 6 and g_lost == 6)
+        if not is_tiebreak and cur_server is not None and server != cur_server:
+            if p_won > p_lost:
+                g_won += 1
+            elif p_lost > p_won:
+                g_lost += 1
+            else:
+                if prev_outcome == "取った":
+                    g_won += 1
+                else:
+                    g_lost += 1
+            p_won, p_lost = 0, 0
+
+            # セット終了判定（6ゲーム先取＆2ゲーム差、または7-5）
+            if (g_won >= 6 and g_won - g_lost >= 2) or (g_won == 7 and g_lost == 5):
+                sets_won += 1
+                g_won, g_lost = 0, 0
+            elif (g_lost >= 6 and g_lost - g_won >= 2) or (g_lost == 7 and g_won == 5):
+                sets_lost += 1
+                g_won, g_lost = 0, 0
+
+        cur_server = server
+        prev_outcome = item['Point_Outcome']
+        is_tiebreak = (g_won == 6 and g_lost == 6)
+
+        # 表示文字列の整形
+        if is_tiebreak:
+            pt_disp = f"[TB {p_won}-{p_lost}]"
+        else:
+            if p_won >= 3 and p_lost >= 3:
+                if p_won == p_lost:
+                    pt_disp = "(40-40 Deuce)"
+                elif p_won == p_lost + 1:
+                    pt_disp = "(Ad-40)"
+                else:
+                    pt_disp = "(40-Ad)"
+            else:
+                pt_disp = f"({PT_MAP.get(p_won, '40')}-{PT_MAP.get(p_lost, '40')})"
+
+        tag = ""
+        if is_first_fault:
+            tag = " [1st Fault]"
+        elif is_let:
+            tag = " [Let]"
+
+        scores.append(f"Set {sets_won}-{sets_lost} | Game {g_won}-{g_lost} {pt_disp}{tag}")
+
+        # ポイント加算（フォールト・レット以外）
+        if not is_first_fault and not is_let:
+            won = (item['Point_Outcome'] == "取った")
+            if won:
+                p_won += 1
+            else:
+                p_lost += 1
+
+            # タイブレーク決着（7点先取＆2点差）
+            if is_tiebreak:
+                if p_won >= 7 and p_won - p_lost >= 2:
+                    sets_won += 1
+                    g_won, g_lost, p_won, p_lost = 0, 0, 0, 0
+                elif p_lost >= 7 and p_lost - p_won >= 2:
+                    sets_lost += 1
+                    g_won, g_lost, p_won, p_lost = 0, 0, 0, 0
+
+    return scores
 
 # ポイントサマリー & 手前選手のキーショット特定
 @st.cache_data
@@ -218,19 +339,12 @@ def analyze_points_and_keyshots(df, focus_player):
             'Key_Type': shot_type,
             'Key_Course': shot_course
         })
+
+    scores = compute_all_match_scores(df, points_data, focus_player)
+    for i, sc in enumerate(scores):
+        points_data[i]['Score'] = sc
+
     return pd.DataFrame(points_data)
-
-# ----------------------------------------------------
-# ノイズ（Shot 0 やサーブ以外から始まる返球等）を除外
-# ----------------------------------------------------
-valid_point_ids = []
-for p_id, grp in shots_df.groupby('Point'):
-    first_row = grp.sort_values('Shot').iloc[0]
-    # Shot 1 で、かつストロークがサーブのものだけを本番ポイントとみなす
-    if first_row['Shot'] == 1 and 'サーブ' in str(first_row['Stroke']):
-        valid_point_ids.append(p_id)
-
-shots_df = shots_df[shots_df['Point'].isin(valid_point_ids)].copy()
 
 full_meta_df = analyze_points_and_keyshots(shots_df, target_player)
 
@@ -584,9 +698,9 @@ with col_court:
     ax.plot([0, 0], [0, 0.4], color='#cbd5e1', linewidth=1.5)
     ax.plot([0, 0], [23.37, 23.77], color='#cbd5e1', linewidth=1.5)
     
-    color_focal = '#38bdf8'     # 手前: 水色
-    color_opp = '#fb923c'       # 相手: オレンジ
-    color_net_miss = '#ef4444'  # ネットミス: 赤
+    color_focal = '#38bdf8'
+    color_opp = '#fb923c'
+    color_net_miss = '#ef4444'
     
     for i, cur in enumerate(records):
         c = color_focal if cur['player'] == target_player else color_opp
@@ -663,106 +777,7 @@ with col_court:
 # 【右側 / 下側】概要 ＆ ショット詳細
 # ====================================================
 with col_info:
-    # 選択ポイントまでのスコア（セット・ゲーム・ポイント）をテニス実戦ロジックで計算
-    pt_map_dict = {0: "0", 1: "15", 2: "30", 3: "40"}
-    
-    sets_won, sets_lost = 0, 0
-    g_won, g_lost = 0, 0
-    p_won, p_lost = 0, 0
-    cur_server = None
-    cur_score_str = "Set 0-0 | 0-0 (0-0)"
-    
-    # 履歴を現在ポイントまで追跡
-    history_pts = full_meta_df[full_meta_df['Point'] <= selected_point].sort_values('Point')
-    
-    for _, h_row in history_pts.iterrows():
-        p_id = h_row['Point']
-        p_shots_sub = shots_df[shots_df['Point'] == p_id].sort_values('Shot')
-        if p_shots_sub.empty:
-            continue
-            
-        first_s = p_shots_sub.iloc[0]
-        server = first_s['Player']
-        
-        # 1. ファーストサーブのフォールト判定
-        is_first_fault = (
-            len(p_shots_sub) == 1 and 
-            'first_serve' in str(first_s.get('Type', '')) and 
-            first_s['Result'] in ['ネット', 'アウト']
-        )
-        
-        # 2. レット（入ったが10秒程度でセカンドサーブが打ち直された無効打球）判定
-        is_let = False
-        if len(p_shots_sub) == 1 and 'サーブ' in str(first_s['Stroke']) and first_s['Result'] == 'イン':
-            # 次のポイントの情報を確認
-            future_pts = full_meta_df[full_meta_df['Point'] > p_id].sort_values('Point')
-            if not future_pts.empty:
-                next_pid = future_pts.iloc[0]['Point']
-                next_shots = shots_df[shots_df['Point'] == next_pid].sort_values('Shot')
-                if not next_shots.empty:
-                    next_first = next_shots.iloc[0]
-                    dt = next_first['Video Time'] - first_s['Video Time']
-                    if (dt < 15.0 and 
-                        next_first['Player'] == server and 
-                        'second_serve' in str(next_first.get('Type', ''))):
-                        is_let = True
-
-        # サーバーが変わったらゲーム終了とみなしてゲームカウントを更新
-        if cur_server is not None and server != cur_server:
-            if p_won > p_lost:
-                g_won += 1
-            elif p_lost > p_won:
-                g_lost += 1
-            else:
-                if prev_outcome == "取った":
-                    g_won += 1
-                else:
-                    g_lost += 1
-            p_won, p_lost = 0, 0
-            
-            # セット終了判定（6ゲーム以上かつ2ゲーム差、または7-6/6-7）
-            if (g_won >= 6 and g_won - g_lost >= 2) or (g_won == 7 and g_lost == 6):
-                sets_won += 1
-                g_won, g_lost = 0, 0
-            elif (g_lost >= 6 and g_lost - g_won >= 2) or (g_lost == 7 and g_won == 6):
-                sets_lost += 1
-                g_won, g_lost = 0, 0
-
-        cur_server = server
-        prev_outcome = h_row['Point_Outcome']
-        
-        # スコア表示文字列の作成
-        is_tiebreak = (g_won == 6 and g_lost == 6)
-        if is_tiebreak:
-            pt_display = f"[TB {p_won}-{p_lost}]"
-        else:
-            if p_won >= 3 and p_lost >= 3:
-                if p_won == p_lost:
-                    pt_display = "(40-40 Deuce)"
-                elif p_won == p_lost + 1:
-                    pt_display = "(Ad-40)"
-                else:
-                    pt_display = "(40-Ad)"
-            else:
-                pt_display = f"({pt_map_dict.get(p_won, '40')}-{pt_map_dict.get(p_lost, '40')})"
-                
-        status_tag = ""
-        if is_first_fault:
-            status_tag = " [1st Fault]"
-        elif is_let:
-            status_tag = " [Let]"
-
-        cur_score_str = f"Set {sets_won}-{sets_lost} | Game {g_won}-{g_lost} {pt_display}{status_tag}"
-
-        # 1stフォールトまたはレット以外の場合のみポイントを加算
-        if not is_first_fault and not is_let:
-            if h_row['Point_Outcome'] == "取った":
-                p_won += 1
-            else:
-                p_lost += 1
-
-    # 通常文字サイズでスコアを表示
-    st.write(f"**🎾 スコア:** {cur_score_str}")
+    st.write(f"**🎾 スコア:** {p_info['Score']}")
     st.write(f"**📌 Point {selected_point} 概要**")
     st.write(f"**ポイント勝敗:** {p_info['Point_Outcome']}")
     st.write(f"**ラリー打数:** {p_info['Total_Shots']} 打 ｜ **決まり方:** {p_info['Finish_Type']}")
