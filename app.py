@@ -419,28 +419,44 @@ st.markdown("""
 .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem !important; }
 [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
 
-/* ナビゲーションバーの固定 */
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
+/* ナビゲーションバーの固定（スマホでも絶対に1行・横並びを維持） */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
     display: flex !important;
     flex-direction: row !important;
+    flex-wrap: nowrap !important;
     align-items: center !important;
+    justify-content: flex-start !important;
     gap: 8px !important;
-    width: 220px !important;
+    width: 100% !important;
+    max-width: 240px !important;
 }
 
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(1),
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(3) {
-    flex: 0 0 44px !important;
-    width: 44px !important;
+/* モバイル時のカラム縦積みを強制解除 */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div[data-testid="column"],
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div[data-testid="stColumn"],
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div {
+    min-width: 0 !important;
 }
 
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(2) {
-    flex: 0 0 110px !important;
-    width: 110px !important;
+/* ◀ ボタンと ▶ ボタンの幅を固定 */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(1),
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(3) {
+    flex: 0 0 46px !important;
+    width: 46px !important;
+    max-width: 46px !important;
 }
 
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
-    height: 38px !important;
+/* 中央の Scene プルダウンの幅を固定 */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(2) {
+    flex: 0 0 115px !important;
+    width: 115px !important;
+    max-width: 115px !important;
+}
+
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
+    height: 40px !important;
+    width: 100% !important;
+    padding: 0 !important;
     font-size: 16px !important;
     font-weight: bold !important;
 }
