@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import io
+import re
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.font_manager as fm
@@ -410,7 +411,7 @@ def on_main_select():
         st.session_state.cur_scene_idx = scene_list.index(chosen)
 
 # ----------------------------------------------------
-# CSS: 検証で成功した1行横並び固定 ＆ スマホ時コート縮小
+# CSS: 1行横並び固定 ＆ スコア表示幅（230px）＆ スマホ時コート縮小
 # ----------------------------------------------------
 st.markdown("""
 <style>
@@ -446,13 +447,13 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-
     width: 46px !important;
 }
 
-/* 4. 中央のセレクトボックス幅（テキストが消えない適正幅） */
+/* 4. 中央のセレクトボックス幅（スコア「1-0 | 1-0 | 0-30」が綺麗に収まる230px） */
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(2) {
     flex: 1 1 auto !important;
-    max-width: 180px !important;
+    max-width: 230px !important;
 }
 
-/* 5. ボタンの高さ */
+/* 5. ボタンのスタイル */
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
     height: 40px !important;
     padding: 0 !important;
@@ -475,7 +476,29 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# ナビゲーションUI（検証で成功した 1:2:1 配置）
+# スコアを「1-0 | 1-0 | 0-30」形式に短縮変換する関数
+# ----------------------------------------------------
+def format_short_score(scene_id):
+    row = full_meta_df[full_meta_df['Scene'] == scene_id]
+    if row.empty:
+        return f"Scene {scene_id}"
+    raw_score = str(row.iloc[0]['Score'])
+    
+    # "Set X | Game A-B (C-D)" または "[TB C-D]" などを抽出
+    m = re.search(r'Set\s*(\d+)\s*\|\s*Game\s*([0-9\-]+)\s*(\([^\)]+\)|\[[^\]]+\])', raw_score)
+    if m:
+        set_num = int(m.group(1))
+        game_part = m.group(2)
+        pt_part = m.group(3).replace('(', '').replace(')', '').replace('[', '').replace(']', '').replace('1st Fault', '').strip()
+        
+        # セットスコア（Set 1: 0-0, Set 2: 1-0 など）
+        set_score_str = f"{set_num - 1}-0" if set_num > 1 else "0-0"
+        return f"{set_score_str} | {game_part} | {pt_part}"
+    
+    return raw_score
+
+# ----------------------------------------------------
+# ナビゲーションUI（短縮スコア表示）
 # ----------------------------------------------------
 col_prev, col_sel, col_next = st.columns([1, 2, 1], gap="small")
 with col_prev:
@@ -485,7 +508,7 @@ with col_sel:
         "Scene",
         options=scene_list,
         index=st.session_state.cur_scene_idx,
-        format_func=lambda x: f"Scene {x}",
+        format_func=format_short_score,
         key="main_scene_select",
         on_change=on_main_select,
         label_visibility="collapsed"
@@ -507,6 +530,7 @@ with col_court:
     focal_shots = s_shots[s_shots['Player'] == target_player]
     opp_shots = s_shots[s_shots['Player'] != target_player]
     
+    # 手前・奥の判定（相手のみのフォールト時も正確に判定）
     is_far = False
     if not focal_shots.empty:
         if focal_shots['Hit (y)'].mean() > NET_Y:
