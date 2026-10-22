@@ -378,7 +378,7 @@ if "last_filter_sig" not in st.session_state or st.session_state.last_filter_sig
 if "cur_scene_idx" not in st.session_state or st.session_state.cur_scene_idx >= len(scene_list):
     st.session_state.cur_scene_idx = 0
 
-# ネイティブセレクトボックスからのクエリパラメータ変更検知
+# ネイティブセレクトボックスからの変更検知
 query_params = st.query_params
 if "sel_scene" in query_params:
     try:
@@ -438,7 +438,7 @@ for s_id in scene_list:
         scene_display_labels[s_id] = raw_score
 
 # ----------------------------------------------------
-# CSS: 1行横並び固定 ＆ スマホ時コート縮小
+# 安全なCSS設定（コート描画カラムを一切阻害しない）
 # ----------------------------------------------------
 st.markdown("""
 <style>
@@ -451,35 +451,34 @@ st.markdown("""
     gap: 0.3rem !important;
 }
 
-/* ナビゲーションバー：1行横並び */
-div[data-testid="stHorizontalBlock"] {
+/* ナビゲーション行（iframeを含む行）だけを限定指定して横並びにする */
+div[data-testid="stHorizontalBlock"]:has(iframe) {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
     gap: 8px !important;
     width: 100% !important;
+    max-width: 400px !important;
+    margin-bottom: 15px !important;
 }
 
-div[data-testid="stHorizontalBlock"] > div {
-    min-width: 0 !important;
-}
-
-/* ◀ と ▶ は 46px 固定 */
-div[data-testid="stHorizontalBlock"] > div:nth-child(1),
-div[data-testid="stHorizontalBlock"] > div:nth-child(3) {
+/* 左右ボタン枠を 46px 固定 */
+div[data-testid="stHorizontalBlock"]:has(iframe) > div:nth-child(1),
+div[data-testid="stHorizontalBlock"]:has(iframe) > div:nth-child(3) {
     flex: 0 0 46px !important;
     width: 46px !important;
+    min-width: 46px !important;
 }
 
 /* 中央のセレクト枠 */
-div[data-testid="stHorizontalBlock"] > div:nth-child(2) {
+div[data-testid="stHorizontalBlock"]:has(iframe) > div:nth-child(2) {
     flex: 1 1 auto !important;
-    max-width: 260px !important;
+    min-width: 0 !important;
 }
 
-/* ボタンのスタイル */
-div[data-testid="stHorizontalBlock"] button {
+/* ナビゲーションボタンの高さ */
+div[data-testid="stHorizontalBlock"]:has(iframe) button {
     height: 40px !important;
     padding: 0 !important;
     font-size: 16px !important;
@@ -492,7 +491,7 @@ div[data-testid="stHorizontalBlock"] button {
     div[data-testid="stpyplot"],
     div[data-testid="stPlotlyChart"],
     div.element-container:has(figure) {
-        width: 68% !important;
+        width: 75% !important;
         margin-left: auto !important;
         margin-right: auto !important;
     }
@@ -527,7 +526,7 @@ select {{
     background-color: #f8fafc;
     border: 1px solid #cbd5e1;
     border-radius: 8px;
-    padding: 0 10px;
+    padding: 0 8px;
     font-size: 14px;
     font-weight: 500;
     color: #1e293b;
@@ -560,17 +559,17 @@ selected_scene = cur_scene
 s_info = full_meta_df[full_meta_df['Scene'] == selected_scene].iloc[0]
 s_shots = shots_dict.get(selected_scene, pd.DataFrame())
 
+# ====================================================
+# 【メイン画面】左: コート描画 / 右: 詳細情報
+# ====================================================
 col_court, col_info = st.columns([1.1, 1.0])
 
-# ====================================================
-# 【左側】コート描画
-# ====================================================
 with col_court:
     NET_Y = 11.885
     focal_shots = s_shots[s_shots['Player'] == target_player]
     opp_shots = s_shots[s_shots['Player'] != target_player]
     
-    # 手前・奥の判定（相手のみのフォールト時も正確に判定）
+    # 手前・奥の判定
     is_far = False
     if not focal_shots.empty:
         if focal_shots['Hit (y)'].mean() > NET_Y:
@@ -599,7 +598,7 @@ with col_court:
     if view_mode == "決着ラスト2打のみ表示":
         records = records[-min(2, len(records)):]
 
-    fig, ax = plt.subplots(figsize=(5.5, 9.5), facecolor='#0f172a')
+    fig, ax = plt.subplots(figsize=(6.0, 10.0), facecolor='#0f172a')
     ax.set_facecolor('#0f172a')
 
     # コートライン描画
