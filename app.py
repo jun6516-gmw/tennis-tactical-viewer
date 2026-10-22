@@ -439,10 +439,10 @@ st.markdown("""
 }
 
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(2) {
-    flex: 0 0 100px !important;
-    width: 100px !important;
-    max-width: 100px !important;
-    min-width: 100px !important;
+    flex: 0 0 230px !important;
+    width: 230px !important;
+    max-width: 230px !important;
+    min-width: 230px !important;
 }
 
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
