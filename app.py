@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import io
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.font_manager as fm
@@ -9,40 +8,53 @@ import matplotlib.colors as mcolors
 
 # ----------------------------------------------------
 # 打球速度に応じたカラーマップの定義
+# 0km/h: 白 -> 60km/h: 緑 -> 100km/h: 黄 -> 150km/h以上: 赤
 # ----------------------------------------------------
 speed_thresholds = [0, 60, 100, 150]
 colors_list = ["#ffffff", "#22c55e", "#eab308", "#ef4444"]
+
 positions = [s / 150.0 for s in speed_thresholds]
-ball_speed_cmap = mcolors.LinearSegmentedColormap.from_list("ball_speed_cmap", list(zip(positions, colors_list)))
+cmap_dict = list(zip(positions, colors_list))
+ball_speed_cmap = mcolors.LinearSegmentedColormap.from_list("ball_speed_cmap", cmap_dict)
 
 def get_speed_color(speed_kmh):
+    """打球速度(km/h)から無段階のグラデーション色(HEX)を返す"""
     if speed_kmh is None or np.isnan(speed_kmh) or speed_kmh <= 0:
         return "#ffffff"
     norm_val = np.clip(speed_kmh / 150.0, 0.0, 1.0)
     return mcolors.to_hex(ball_speed_cmap(norm_val))
 
-# OS依存のない日本語フォント設定
+# OS依存のないフォント設定
 JP_FONTS = [
     'Yu Gothic', 'Meiryo', 'MS Gothic',
     'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
     'Noto Sans CJK JP', 'TakaoGothic', 'IPAGothic', 'DejaVu Sans'
 ]
 available_fonts = {f.name for f in fm.fontManager.ttflist}
-selected_font = 'sans-serif'
 for font in JP_FONTS:
     if font in available_fonts:
-        selected_font = font
         plt.rcParams['font.family'] = font
         break
 
+# ページ基本設定
 st.set_page_config(page_title="Tennis Match Tactical Visualizer", layout="wide")
 
 STROKE_MAP = {
-    'サーブ': 'Serve', 'フォアハンド': 'Forehand', 'バックハンド': 'Backhand',
-    'フォアハンド ボレー': 'FH Volley', 'バックハンド ボレー': 'BH Volley',
-    'スマッシュ': 'Smash', 'ドロップ': 'Drop Shot', 'フィード': 'Feed'
+    'サーブ': 'Serve',
+    'フォアハンド': 'Forehand',
+    'バックハンド': 'Backhand',
+    'フォアハンド ボレー': 'FH Volley',
+    'バックハンド ボレー': 'BH Volley',
+    'スマッシュ': 'Smash',
+    'ドロップ': 'Drop Shot',
+    'フィード': 'Feed'
 }
-RESULT_MAP = {'イン': 'IN', 'アウト': 'OUT', 'ネット': 'NET'}
+
+RESULT_MAP = {
+    'イン': 'IN',
+    'アウト': 'OUT',
+    'ネット': 'NET'
+}
 
 def translate_stroke(stroke):
     return STROKE_MAP.get(str(stroke), str(stroke))
@@ -57,16 +69,23 @@ uploaded_file = st.sidebar.file_uploader("SwingVisionファイルを選択 (.xls
 if uploaded_file is None:
     st.markdown("""
     <style>
-    /* PC表示（769px以上）：PC用テキストを表示し、スマホ用を非表示 */
-    .msg-pc { display: inline !important; }
-    .msg-sp { display: none !important; }
-
-    /* スマホ表示（768px以下）：スマホ用テキストを表示し、PC用を非表示 */
-    @media (max-width: 768px) {
-        .msg-pc { display: none !important; }
-        .msg-sp { display: inline !important; }
+    /* 1. デフォルト（サイドバーが折りたたまれている時・スマホ表示時） */
+    .msg-pc {
+        display: none !important;
+    }
+    .msg-sp {
+        display: inline !important;
+    }
+    
+    /* 2. サイドバーが開いて展開されている時（aria-expanded="true"）のみ「左側の〜」を表示 */
+    body:has([data-testid="stSidebar"][aria-expanded="true"]) .msg-pc {
+        display: inline !important;
+    }
+    body:has([data-testid="stSidebar"][aria-expanded="true"]) .msg-sp {
+        display: none !important;
     }
     </style>
+    
     <div style="background-color: #f0f7ff; color: #1e3a8a; padding: 14px 16px; border-radius: 8px; border-left: 5px solid #2563eb; margin: 10px 0;">
         <span class="msg-pc">👈 <strong>左側のサイドバーから</strong></span>
         <span class="msg-sp">👆 <strong>上の ＞＞ をクリックして</strong></span>
@@ -75,345 +94,453 @@ if uploaded_file is None:
     """, unsafe_allow_html=True)
     st.stop()
 
-# ----------------------------------------------------
-# 1. 生ファイルの読み込み（キャッシュ化）
-# ----------------------------------------------------
 @st.cache_data
-def load_raw_data(file_bytes, file_name):
-    shots = pd.DataFrame()
-    points = pd.DataFrame()
-
-    if file_name.endswith(".xlsx"):
-        xls = pd.ExcelFile(io.BytesIO(file_bytes))
+def load_data(file):
+    if file.name.endswith(".xlsx"):
+        xls = pd.ExcelFile(file)
         if "Shots" in xls.sheet_names:
-            shots = pd.read_excel(xls, sheet_name="Shots")
+            df = pd.read_excel(xls, sheet_name="Shots")
         else:
-            shots = pd.read_excel(xls, sheet_name=0)
-            
-        if "Points" in xls.sheet_names:
-            points = pd.read_excel(xls, sheet_name="Points")
+            df = pd.read_excel(xls, sheet_name=0)
     else:
-        shots = pd.read_csv(io.BytesIO(file_bytes))
+        df = pd.read_csv(file)
+    return df
 
-    return shots, points
-
-raw_bytes = uploaded_file.getvalue()
 try:
-    shots_raw, points_raw = load_raw_data(raw_bytes, uploaded_file.name)
+    shots_df = load_data(uploaded_file)
 except Exception as e:
     st.error(f"ファイルの読み込みに失敗しました: {e}")
     st.stop()
 
-if shots_raw.empty:
-    st.error("Shotsデータが存在しません。")
+required_cols = ['Point', 'Shot', 'Player', 'Stroke', 'Speed (KM/H)', 'Bounce (x)', 'Bounce (y)', 'Hit (x)', 'Hit (y)', 'Result']
+missing_cols = [c for c in required_cols if c not in shots_df.columns]
+if missing_cols:
+    st.error(f"必要なカラムが見つかりません: {missing_cols}")
     st.stop()
 
-players = [p for p in shots_raw['Player'].dropna().unique().tolist() if str(p).strip()]
+players = [p for p in shots_df['Player'].dropna().unique().tolist() if str(p).strip()]
 if not players:
-    st.error("有効なPlayerデータが存在しません。")
+    st.error("Playerデータが存在しません。")
     st.stop()
 
 st.sidebar.header("👤 プレイヤー視点設定")
 target_player = st.sidebar.selectbox("手前側に固定するプレイヤーを選択", players, index=0)
 
 # ----------------------------------------------------
-# 2. 自動前処理・加工エンジン（初回のみ実行＆キャッシュ）
+# サイドバー: マッチルール設定
 # ----------------------------------------------------
-PT_MAP = {0: "0", 1: "15", 2: "30", 3: "40"}
+st.sidebar.markdown("---")
+st.sidebar.header("⚙️ マッチルール設定")
+match_rule = st.sidebar.selectbox(
+    "マッチルール形式",
+    ["通常（3セットとも6オール7pt TB）", "ファイナル10ptスーパーTB（1セットオール時）"],
+    index=0
+)
+is_super_tb = (match_rule == "ファイナル10ptスーパーTB（1セットオール時）")
 
+# ポイントサマリー & スコア計算 & キーショット特定
 @st.cache_data
-def process_and_cache_dataset(shots, points, focus_player):
-    dataset = []
+def analyze_points_and_keyshots(df, focus_player, is_super_tb_mode=False):
+    points_data = []
+    point_ids = sorted(df['Point'].unique())
 
-    # A. Pointsシートがありデータ行も入っている場合
-    if not points.empty and len(points) > 0 and 'Video Time' in points.columns:
-        scene_counter = 1
-        for idx, pt_row in points.iterrows():
-            orig_p_id = int(pt_row['Point'])
-            end_t = float(pt_row['Video Time'])
-            dur = float(pt_row.get('Duration', 0.0))
-            start_t = max(0.0, end_t - dur - 1.2) if dur > 0 else max(0.0, end_t - 8.0)
+    p_sets, o_sets = 0, 0
+    p_games, o_games = 0, 0
+    p_pts, o_pts = 0, 0
+    past_sets = []
 
-            sub_shots = shots[(shots['Video Time'] >= start_t) & (shots['Video Time'] <= end_t + 1.2)].copy()
-            if sub_shots.empty:
-                sub_shots = shots[shots['Point'] == orig_p_id].copy()
+    pt_labels = ["0", "15", "30", "40"]
 
-            sub_shots = sub_shots.sort_values('Video Time')
-            sub_shots['Shot_Display'] = range(1, len(sub_shots) + 1)
+    for point_id in point_ids:
+        group = df[df['Point'] == point_id]
+        group_sorted = group.sort_values('Shot')
+        last_shot = group_sorted.iloc[-1]
 
-            h_score = str(pt_row.get('Host Game Score', '0'))
-            g_score = str(pt_row.get('Guest Game Score', '0'))
-            game_num = pt_row.get('Game', 1)
-            set_num = pt_row.get('Set', 1)
-            score_str = f"Set {set_num} | Game {game_num} ({h_score}-{g_score})"
+        last_player = str(last_shot['Player'])
+        last_stroke = translate_stroke(last_shot['Stroke'])
+        last_res = translate_result(last_shot['Result'])
+        total_shots = len(group_sorted)
 
-            winner = str(pt_row.get('Point Winner', ''))
-            detail = str(pt_row.get('Detail', ''))
+        # 勝敗判定
+        if last_player == focus_player:
+            point_outcome = "取った" if last_res == "IN" else "落とした"
+        else:
+            point_outcome = "取った" if last_res in ["OUT", "NET"] else "落とした"
 
-            is_1st_fault = False
-            if len(sub_shots) == 1:
-                first_s = sub_shots.iloc[0]
-                if 'first_serve' in str(first_s.get('Type', '')) and first_s['Result'] in ['ネット', 'アウト']:
-                    is_1st_fault = True
+        # 決まり方
+        if last_res == "OUT":
+            finish_type = "アウト"
+        elif last_res == "NET":
+            finish_type = "ネット"
+        elif last_res == "IN":
+            finish_type = "エース"
+        else:
+            finish_type = "その他"
 
-            if is_1st_fault:
-                point_outcome = "-"
-                finish_type = "1st Fault"
+        # スコア状態判定
+        current_set_num = p_sets + o_sets + 1
+        is_final_super_tb = is_super_tb_mode and (p_sets == 1 and o_sets == 1)
+        is_normal_tb = (not is_final_super_tb) and (p_games == 6 and o_games == 6)
+
+        if is_final_super_tb or is_normal_tb:
+            pt_score_str = f"TB {p_pts}-{o_pts}"
+        else:
+            if p_pts >= 3 and o_pts >= 3:
+                if p_pts == o_pts:
+                    pt_score_str = "40-40 (Deuce)"
+                elif p_pts == o_pts + 1:
+                    pt_score_str = "Ad-40"
+                elif o_pts == p_pts + 1:
+                    pt_score_str = "40-Ad"
+                else:
+                    pt_score_str = "40-40"
             else:
-                point_outcome = "取った" if winner == focus_player else "落とした"
-                finish_type = "その他"
-                if "アウト" in detail or "out" in detail.lower():
-                    finish_type = "アウト"
-                elif "ネット" in detail or "net" in detail.lower():
-                    finish_type = "ネット"
-                elif "エース" in detail or "ace" in detail.lower():
-                    finish_type = "エース"
-                elif "ウィナー" in detail or "winner" in detail.lower():
-                    finish_type = "ウィナー"
+                pl = pt_labels[p_pts] if p_pts < 4 else "40"
+                ol = pt_labels[o_pts] if o_pts < 4 else "40"
+                pt_score_str = f"{pl}-{ol}"
 
-            dataset.append({
-                'Scene': scene_counter,
-                'Orig_Point': orig_p_id,
-                'Score': score_str,
-                'Point_Outcome': point_outcome,
-                'Finish_Type': finish_type,
-                'Total_Shots': len(sub_shots),
-                'Detail': detail if detail else f"Winner: {winner}",
-                'Shots_DF': sub_shots
-            })
-            scene_counter += 1
+        past_sets_str = " ".join([f"{ps}-{os}" for ps, os in past_sets])
+        if is_final_super_tb:
+            score_disp = f"Set {current_set_num} [Match TB]: {pt_score_str}"
+        else:
+            score_disp = f"Set {current_set_num} ({p_games}-{o_games}) {pt_score_str}"
 
-    # B. Pointsシートが無い場合のフォールバック（Shotsシートから通しシミュレーション）
-    else:
-        valid_p_ids = []
-        for p_id, grp in shots.groupby('Point'):
-            f_row = grp.sort_values('Shot').iloc[0]
-            if f_row['Shot'] == 1 and 'サーブ' in str(f_row['Stroke']):
-                valid_p_ids.append(p_id)
+        full_score_summary = f"{past_sets_str + ' ' if past_sets_str else ''}{score_disp}".strip()
 
-        shots_clean = shots[shots['Point'].isin(valid_p_ids)].copy()
-        temp_scenes = []
-        for p_id in sorted(valid_p_ids):
-            grp = shots_clean[shots_clean['Point'] == p_id].sort_values('Shot')
-            last_s = grp.iloc[-1]
-            last_p = str(last_s['Player'])
-            last_res = translate_result(last_s['Result'])
-            won = (last_p == focus_player and last_res == "IN") or (last_p != focus_player and last_res in ["OUT", "NET"])
-            f_type = "アウト" if last_res == "OUT" else ("ネット" if last_res == "NET" else "エース")
+        # 次ポイントへの更新
+        if point_outcome == "取った":
+            p_pts += 1
+        else:
+            o_pts += 1
 
-            temp_scenes.append({
-                'Orig_Point': int(p_id),
-                'Won': won,
-                'Outcome': "取った" if won else "落とした",
-                'Finish': f_type,
-                'Detail': f"{last_p}: {translate_stroke(last_s['Stroke'])} -> {last_res}",
-                'Shots': grp
-            })
+        if is_final_super_tb:
+            if p_pts >= 10 and p_pts >= o_pts + 2:
+                p_sets += 1
+                past_sets.append((f"[{p_pts}", f"{o_pts}]"))
+                p_pts, o_pts = 0, 0
+            elif o_pts >= 10 and o_pts >= p_pts + 2:
+                o_sets += 1
+                past_sets.append((f"[{p_pts}", f"{o_pts}]"))
+                p_pts, o_pts = 0, 0
+        elif is_normal_tb:
+            if p_pts >= 7 and p_pts >= o_pts + 2:
+                p_games += 1
+                p_sets += 1
+                past_sets.append((p_games, o_games))
+                p_games, o_games, p_pts, o_pts = 0, 0, 0, 0
+            elif o_pts >= 7 and o_pts >= p_pts + 2:
+                o_games += 1
+                o_sets += 1
+                past_sets.append((p_games, o_games))
+                p_games, o_games, p_pts, o_pts = 0, 0, 0, 0
+        else:
+            game_won = None
+            if p_pts >= 4 and p_pts >= o_pts + 2:
+                p_games += 1
+                game_won = True
+                p_pts, o_pts = 0, 0
+            elif o_pts >= 4 and o_pts >= p_pts + 2:
+                o_games += 1
+                game_won = False
+                p_pts, o_pts = 0, 0
 
-        sets_w, sets_l = 0, 0
-        g_w, g_l = 0, 0
-        p_w, p_l = 0, 0
-        cur_server = None
-        prev_won = True
-        scene_counter = 1
+            if game_won is not None:
+                if (p_games >= 6 and p_games >= o_games + 2) or p_games == 7:
+                    p_sets += 1
+                    past_sets.append((p_games, o_games))
+                    p_games, o_games = 0, 0
+                elif (o_games >= 6 and o_games >= p_games + 2) or o_games == 7:
+                    o_sets += 1
+                    past_sets.append((p_games, o_games))
+                    p_games, o_games = 0, 0
 
-        for idx, item in enumerate(temp_scenes):
-            grp = item['Shots']
-            first_s = grp.iloc[0]
-            server = str(first_s['Player'])
+        # キーショット判定
+        key_shot_row = None
+        if point_outcome == "取った":
+            if finish_type == "エース" and last_player == focus_player:
+                key_shot_row = last_shot
+            elif finish_type in ["アウト", "ネット"]:
+                if len(group_sorted) >= 2:
+                    prev_shot = group_sorted.iloc[-2]
+                    if str(prev_shot['Player']) == focus_player:
+                        key_shot_row = prev_shot
+        else:
+            if finish_type == "エース":
+                if len(group_sorted) >= 2:
+                    prev_shot = group_sorted.iloc[-2]
+                    if str(prev_shot['Player']) == focus_player:
+                        key_shot_row = prev_shot
+            elif finish_type in ["アウト", "ネット"] and last_player == focus_player:
+                key_shot_row = last_shot
 
-            is_1st_fault = (len(grp) == 1 and 'first_serve' in str(first_s.get('Type', '')) and first_s['Result'] in ['ネット', 'アウト'])
+        shot_category = "なし"
+        shot_type = "なし"
+        shot_course = "なし"
 
-            is_let = False
-            if len(grp) == 1 and 'サーブ' in str(first_s['Stroke']) and first_s['Result'] == 'イン':
-                if idx + 1 < len(temp_scenes):
-                    next_grp = temp_scenes[idx + 1]['Shots']
-                    if not next_grp.empty:
-                        next_f = next_grp.iloc[0]
-                        if 'Video Time' in next_f and 'Video Time' in first_s:
-                            dt = next_f['Video Time'] - first_s['Video Time']
-                            if dt < 15.0 and next_f['Player'] == server and 'second_serve' in str(next_f.get('Type', '')):
-                                is_let = True
+        if key_shot_row is not None:
+            stk = str(key_shot_row.get('Stroke', ''))
+            dir_val = str(key_shot_row.get('Direction', ''))
+            stk_clean = stk.lower().strip()
+            dir_clean = dir_val.lower().strip()
 
-            is_tb = (g_w == 6 and g_l == 6)
-            if not is_1st_fault and not is_let and not is_tb:
-                will_game_end = False
-                if item['Won'] and p_w >= 3 and (p_w + 1 - p_l >= 2):
-                    will_game_end = True
-                elif not item['Won'] and p_l >= 3 and (p_l + 1 - p_w >= 2):
-                    will_game_end = True
+            is_serve = ('サーブ' in stk or 'serve' in stk_clean)
+            is_volley = ('ボレー' in stk or 'volley' in stk_clean)
+            is_smash = ('スマッシュ' in stk or 'smash' in stk_clean)
 
-                if will_game_end and idx + 1 < len(temp_scenes):
-                    next_grp = temp_scenes[idx + 1]['Shots']
-                    if not next_grp.empty and str(next_grp.iloc[0]['Player']) == server:
-                        is_let = True
+            course_val = "その他"
+            if 'クロス' in dir_val or 'cross' in dir_clean:
+                course_val = "クロス"
+            elif '逆クロス' in dir_val or 'inside' in dir_clean or 'ストレート' in dir_val or 'down the line' in dir_clean or 'line' in dir_clean:
+                course_val = "逆クロス"
 
-            if is_let:
-                continue
-
-            if not is_tb and cur_server is not None and server != cur_server:
-                if p_w > p_l:
-                    g_w += 1
-                elif p_l > p_w:
-                    g_l += 1
+            if is_serve:
+                shot_category = "サービス"
+                if 'センター' in dir_val or 'center' in dir_clean or ' t' in dir_clean or dir_clean == 't':
+                    shot_course = "センター"
+                elif 'ワイド' in dir_val or 'wide' in dir_clean:
+                    shot_course = "ワイド"
                 else:
-                    if prev_won:
-                        g_w += 1
-                    else:
-                        g_l += 1
-                p_w, p_l = 0, 0
-
-                if (g_w >= 6 and g_w - g_l >= 2) or (g_w == 7 and g_l == 5):
-                    sets_w += 1
-                    g_w, g_l = 0, 0
-                elif (g_l >= 6 and g_l - g_w >= 2) or (g_l == 7 and g_w == 5):
-                    sets_l += 1
-                    g_w, g_l = 0, 0
-
-            cur_server = server
-            if not is_1st_fault:
-                prev_won = item['Won']
-            is_tb = (g_w == 6 and g_l == 6)
-
-            if is_tb:
-                pt_str = f"[TB {p_w}-{p_l}]"
+                    shot_course = "その他"
+            elif is_volley:
+                shot_category = "ボレー"
+                shot_type = "フォア" if ('フォア' in stk or 'forehand' in stk_clean or stk_clean.startswith('fh')) else "バック"
+                shot_course = course_val
+            elif is_smash:
+                shot_category = "スマッシュ"
+                shot_course = course_val
             else:
-                if p_w >= 3 and p_l >= 3:
-                    pt_str = "(40-40 Deuce)" if p_w == p_l else ("(Ad-40)" if p_w == p_l + 1 else "(40-Ad)")
-                else:
-                    pt_str = f"({PT_MAP.get(p_w, '40')}-{PT_MAP.get(p_l, '40')})"
+                shot_category = "グラウンドストローク"
+                shot_type = "フォア" if ('フォア' in stk or 'forehand' in stk_clean or stk_clean.startswith('fh')) else "バック"
+                shot_course = course_val
 
-            tag = " [1st Fault]" if is_1st_fault else ""
-            score_text = f"Set {sets_w + 1} | Game {g_w}-{g_l} {pt_str}{tag}"
+        points_data.append({
+            'Point': int(point_id),
+            'Display_Score': full_score_summary,
+            'Total_Shots': total_shots,
+            'Point_Outcome': point_outcome,
+            'Finish_Type': finish_type,
+            'Last_Player': last_player,
+            'Last_Stroke': last_stroke,
+            'Last_Result': last_res,
+            'Detail': f"{last_player}: {last_stroke} -> {last_res}",
+            'Key_Category': shot_category,
+            'Key_Type': shot_type,
+            'Key_Course': shot_course
+        })
+    return pd.DataFrame(points_data)
 
-            grp_copy = grp.copy()
-            grp_copy['Shot_Display'] = range(1, len(grp_copy) + 1)
-
-            final_outcome = "-" if is_1st_fault else item['Outcome']
-            final_finish = "1st Fault" if is_1st_fault else item['Finish']
-
-            dataset.append({
-                'Scene': scene_counter,
-                'Orig_Point': item['Orig_Point'],
-                'Score': score_text,
-                'Point_Outcome': final_outcome,
-                'Finish_Type': final_finish,
-                'Total_Shots': len(grp),
-                'Detail': item['Detail'],
-                'Shots_DF': grp_copy
-            })
-            scene_counter += 1
-
-            if not is_1st_fault:
-                if item['Won']:
-                    p_w += 1
-                else:
-                    p_l += 1
-
-                if is_tb:
-                    if p_w >= 7 and p_w - p_l >= 2:
-                        sets_w += 1
-                        g_w, g_l, p_w, p_l = 0, 0, 0, 0
-                    elif p_l >= 7 and p_l - p_w >= 2:
-                        sets_l += 1
-                        g_w, g_l, p_w, p_l = 0, 0, 0, 0
-
-    return dataset
-
-# 前処理の実行（初回のみ）
-with st.spinner("試合データを解析・最適化中..."):
-    match_scenes = process_and_cache_dataset(shots_raw, points_raw, target_player)
-
-if not match_scenes:
-    st.error("有効なシーンデータが見つかりませんでした。")
-    st.stop()
-
-full_meta_df = pd.DataFrame([{k: v for k, v in item.items() if k != 'Shots_DF'} for item in match_scenes])
-shots_dict = {item['Scene']: item['Shots_DF'] for item in match_scenes}
+full_meta_df = analyze_points_and_keyshots(shots_df, target_player, is_super_tb)
 
 # ----------------------------------------------------
-# サイドバー: フィルタ ＆ ダウンロード
+# サイドバー: 段階連動型フィルタUI
 # ----------------------------------------------------
+st.sidebar.markdown("---")
 st.sidebar.header("🔍 フィルタ設定")
 
 c_all = len(full_meta_df)
 c_won = len(full_meta_df[full_meta_df['Point_Outcome'] == '取った'])
 c_lost = len(full_meta_df[full_meta_df['Point_Outcome'] == '落とした'])
-c_none = len(full_meta_df[full_meta_df['Point_Outcome'] == '-'])
 
-outcome_map = {
+point_map = {
     f"すべて ({c_all})": "すべて",
     f"取った ({c_won})": "取った",
     f"落とした ({c_lost})": "落とした"
 }
-if c_none > 0:
-    outcome_map[f"- / 1st Fault ({c_none})"] = "-"
+chosen_point_label = st.sidebar.selectbox("■ ポイント", list(point_map.keys()))
+sel_point = point_map[chosen_point_label]
 
-chosen_outcome_label = st.sidebar.selectbox("■ シーン勝敗", list(outcome_map.keys()))
-sel_outcome = outcome_map[chosen_outcome_label]
-
-if sel_outcome == "すべて":
+if sel_point == "すべて":
     df_s1 = full_meta_df
 else:
-    df_s1 = full_meta_df[full_meta_df['Point_Outcome'] == sel_outcome]
+    df_s1 = full_meta_df[full_meta_df['Point_Outcome'] == sel_point]
 
-finish_options = ["すべて"] + [f for f in df_s1['Finish_Type'].unique() if f != "その他"]
-chosen_finish = st.sidebar.selectbox("■ 決まり方", finish_options)
+cnt_s1 = len(df_s1)
 
-if chosen_finish == "すべて":
-    final_df = df_s1
+c_ace = len(df_s1[df_s1['Finish_Type'] == 'エース'])
+c_out = len(df_s1[df_s1['Finish_Type'] == 'アウト'])
+c_net = len(df_s1[df_s1['Finish_Type'] == 'ネット'])
+
+finish_map = {
+    f"すべて ({cnt_s1})": "すべて",
+    f"エース ({c_ace})": "エース",
+    f"アウト ({c_out})": "アウト",
+    f"ネット ({c_net})": "ネット"
+}
+chosen_finish_label = st.sidebar.selectbox("■ 決まり方", list(finish_map.keys()))
+sel_finish = finish_map[chosen_finish_label]
+
+if sel_finish == "すべて":
+    df_s2 = df_s1
 else:
-    final_df = df_s1[df_s1['Finish_Type'] == chosen_finish]
+    df_s2 = df_s1[df_s1['Finish_Type'] == sel_finish]
 
-if final_df.empty:
-    st.warning("⚠️ 選択した条件に一致するシーンがありません。")
-    st.stop()
-
-scene_list = final_df['Scene'].tolist()
-
-filter_sig = f"{sel_outcome}_{chosen_finish}"
-if "last_filter_sig" not in st.session_state or st.session_state.last_filter_sig != filter_sig:
-    st.session_state.last_filter_sig = filter_sig
-    st.session_state.cur_scene_idx = 0
-
-if "cur_scene_idx" not in st.session_state or st.session_state.cur_scene_idx >= len(scene_list):
-    st.session_state.cur_scene_idx = 0
+cnt_s2 = len(df_s2)
 
 st.sidebar.markdown("---")
-st.sidebar.header("📥 データ出力")
-csv_buffer = io.StringIO()
-full_meta_df.to_csv(csv_buffer, index=False)
-st.sidebar.download_button(
-    label="加工済みScene一覧(CSV)を保存",
-    data=csv_buffer.getvalue().encode('utf-8-sig'),
-    file_name="processed_scenes.csv",
-    mime="text/csv"
-)
+st.sidebar.markdown("##### 🎾 キーショットフィルタ")
+
+df_srv = df_s2[df_s2['Key_Category'] == 'サービス']
+c_srv_cen = len(df_srv[df_srv['Key_Course'] == 'センター'])
+c_srv_wde = len(df_srv[df_srv['Key_Course'] == 'ワイド'])
+
+serve_map = {
+    f"すべて ({cnt_s2})": "すべて",
+    f"センター ({c_srv_cen})": "センター",
+    f"ワイド ({c_srv_wde})": "ワイド"
+}
+chosen_srv_label = st.sidebar.selectbox("サービス コース", list(serve_map.keys()))
+sel_serve = serve_map[chosen_srv_label]
+
+if sel_serve == "センター":
+    df_s3 = df_s2[(df_s2['Key_Category'] == 'サービス') & (df_s2['Key_Course'] == 'センター')]
+elif sel_serve == "ワイド":
+    df_s3 = df_s2[(df_s2['Key_Category'] == 'サービス') & (df_s2['Key_Course'] == 'ワイド')]
+else:
+    df_s3 = df_s2
+
+cnt_s3 = len(df_s3)
+
+df_gs = df_s3[df_s3['Key_Category'] == 'グラウンドストローク']
+c_strk_fh = len(df_gs[df_gs['Key_Type'] == 'フォア'])
+c_strk_bh = len(df_gs[df_gs['Key_Type'] == 'バック'])
+
+gs_type_map = {
+    f"すべて ({cnt_s3})": "すべて",
+    f"フォア ({c_strk_fh})": "フォア",
+    f"バック ({c_strk_bh})": "バック"
+}
+chosen_gs_type_label = st.sidebar.selectbox("ストローク タイプ", list(gs_type_map.keys()))
+sel_gs_type = gs_type_map[chosen_gs_type_label]
+
+if sel_gs_type == "フォア":
+    df_gs_sub = df_gs[df_gs['Key_Type'] == 'フォア']
+elif sel_gs_type == "バック":
+    df_gs_sub = df_gs[df_gs['Key_Type'] == 'バック']
+else:
+    df_gs_sub = df_gs
+
+c_gs_cr = len(df_gs_sub[df_gs_sub['Key_Course'] == 'クロス'])
+c_gs_in = len(df_gs_sub[df_gs_sub['Key_Course'] == '逆クロス'])
+cnt_gs_sub = len(df_gs_sub)
+
+gs_course_map = {
+    f"すべて ({cnt_gs_sub})": "すべて",
+    f"クロス ({c_gs_cr})": "クロス",
+    f"逆クロス ({c_gs_in})": "逆クロス"
+}
+chosen_gs_course_label = st.sidebar.selectbox("ストローク コース", list(gs_course_map.keys()))
+sel_gs_course = gs_course_map[chosen_gs_course_label]
+
+df_vol = df_s3[df_s3['Key_Category'] == 'ボレー']
+c_vol_fh = len(df_vol[df_vol['Key_Type'] == 'フォア'])
+c_vol_bh = len(df_vol[df_vol['Key_Type'] == 'バック'])
+
+vol_type_map = {
+    f"すべて ({cnt_s3})": "すべて",
+    f"フォア ({c_vol_fh})": "フォア",
+    f"バック ({c_vol_bh})": "バック"
+}
+chosen_vol_type_label = st.sidebar.selectbox("ボレー タイプ", list(vol_type_map.keys()))
+sel_vol_type = vol_type_map[chosen_vol_type_label]
+
+if sel_vol_type == "フォア":
+    df_vol_sub = df_vol[df_vol['Key_Type'] == 'フォア']
+elif sel_vol_type == "バック":
+    df_vol_sub = df_vol[df_vol['Key_Type'] == 'バック']
+else:
+    df_vol_sub = df_vol
+
+c_vol_cr = len(df_vol_sub[df_vol_sub['Key_Course'] == 'クロス'])
+c_vol_in = len(df_vol_sub[df_vol_sub['Key_Course'] == '逆クロス'])
+cnt_vol_sub = len(df_vol_sub)
+
+vol_course_map = {
+    f"すべて ({cnt_vol_sub})": "すべて",
+    f"クロス ({c_vol_cr})": "クロス",
+    f"逆クロス ({c_vol_in})": "逆クロス"
+}
+chosen_vol_course_label = st.sidebar.selectbox("ボレー コース", list(vol_course_map.keys()))
+sel_vol_course = vol_course_map[chosen_vol_course_label]
+
+df_sm = df_s3[df_s3['Key_Category'] == 'スマッシュ']
+c_sm_cr = len(df_sm[df_sm['Key_Course'] == 'クロス'])
+c_sm_in = len(df_sm[df_sm['Key_Course'] == '逆クロス'])
+cnt_sm = len(df_sm)
+
+smash_map = {
+    f"すべて ({cnt_s3})": "すべて",
+    f"クロス ({c_sm_cr})": "クロス",
+    f"逆クロス ({c_sm_in})": "逆クロス"
+}
+chosen_smash_label = st.sidebar.selectbox("スマッシュ コース", list(smash_map.keys()))
+sel_smash = smash_map[chosen_smash_label]
+
+# 最終絞り込み
+final_df = df_s3.copy()
+
+if sel_gs_type != "すべて" or sel_gs_course != "すべて":
+    final_df = final_df[final_df['Key_Category'] == 'グラウンドストローク']
+    if sel_gs_type != "すべて":
+        final_df = final_df[final_df['Key_Type'] == sel_gs_type]
+    if sel_gs_course != "すべて":
+        final_df = final_df[final_df['Key_Course'] == sel_gs_course]
+
+if sel_vol_type != "すべて" or sel_vol_course != "すべて":
+    final_df = final_df[final_df['Key_Category'] == 'ボレー']
+    if sel_vol_type != "すべて":
+        final_df = final_df[final_df['Key_Type'] == sel_vol_type]
+    if sel_vol_course != "すべて":
+        final_df = final_df[final_df['Key_Course'] == sel_vol_course]
+
+if sel_smash != "すべて":
+    final_df = final_df[final_df['Key_Category'] == 'スマッシュ']
+    final_df = final_df[final_df['Key_Course'] == sel_smash]
+
+if final_df.empty:
+    st.warning("⚠️ 選択した条件に一致するポイントがありません。フィルタ条件を緩和してください。")
+    st.stop()
+
+point_list = final_df['Point'].tolist()
+
+filter_signature = f"{sel_point}_{sel_finish}_{sel_serve}_{sel_gs_type}_{sel_gs_course}_{sel_vol_type}_{sel_vol_course}_{sel_smash}_{match_rule}"
+if "last_filter_signature" not in st.session_state or st.session_state.last_filter_signature != filter_signature:
+    st.session_state.last_filter_signature = filter_signature
+    st.session_state.current_point_idx = 0
+
+if "current_point_idx" not in st.session_state or st.session_state.current_point_idx >= len(point_list):
+    st.session_state.current_point_idx = 0
 
 st.sidebar.markdown("---")
 st.sidebar.header("🎨 表示設定")
-view_mode = st.sidebar.radio("描画モード", ["全ラリー表示", "決着ラスト2打のみ表示"], index=0)
-
-if "main_scene_select" not in st.session_state or st.session_state.main_scene_select not in scene_list:
-    st.session_state.main_scene_select = scene_list[st.session_state.cur_scene_idx]
-
-def go_prev_scene():
-    if st.session_state.cur_scene_idx > 0:
-        st.session_state.cur_scene_idx -= 1
-        st.session_state.main_scene_select = scene_list[st.session_state.cur_scene_idx]
-
-def go_next_scene():
-    if st.session_state.cur_scene_idx < len(scene_list) - 1:
-        st.session_state.cur_scene_idx += 1
-        st.session_state.main_scene_select = scene_list[st.session_state.cur_scene_idx]
-
-def on_main_select():
-    chosen = st.session_state.main_scene_select
-    if chosen in scene_list:
-        st.session_state.cur_scene_idx = scene_list.index(chosen)
+view_mode = st.sidebar.radio(
+    "描画モード",
+    ["全ラリー表示", "決着ラスト2打のみ表示"],
+    index=0
+)
 
 # ----------------------------------------------------
-# CSS: スマホ時のコート縮小 ＆ ナビゲーションの固定
+# ナビゲーション管理
+# ----------------------------------------------------
+if "main_pt_select" not in st.session_state or st.session_state.main_pt_select not in point_list:
+    st.session_state.main_pt_select = point_list[st.session_state.current_point_idx]
+
+def go_prev_pt():
+    if st.session_state.current_point_idx > 0:
+        st.session_state.current_point_idx -= 1
+        st.session_state.main_pt_select = point_list[st.session_state.current_point_idx]
+
+def go_next_pt():
+    if st.session_state.current_point_idx < len(point_list) - 1:
+        st.session_state.current_point_idx += 1
+        st.session_state.main_pt_select = point_list[st.session_state.current_point_idx]
+
+def on_main_select():
+    chosen = st.session_state.main_pt_select
+    if chosen in point_list:
+        st.session_state.current_point_idx = point_list.index(chosen)
+
+# ----------------------------------------------------
+# ナビゲーション & スマホ用コート図縮小CSS
 # ----------------------------------------------------
 st.markdown("""
 <style>
@@ -426,7 +553,6 @@ st.markdown("""
     gap: 0.3rem !important;
 }
 
-/* ナビゲーションバーの固定（動作実績コード完全準拠） */
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
     display: flex !important;
     flex-direction: row !important;
@@ -440,7 +566,7 @@ st.markdown("""
     padding-bottom: 0px !important;
 }
 
-/* 1番目(◀)と3番目(▶)のカラム: 44px固定 */
+/* 1番目(◀)と3番目(▶)のカラム: 48px固定 */
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:first-child,
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:first-child,
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(3),
@@ -450,7 +576,22 @@ st.markdown("""
     max-width: 44px !important;
 }
 
-/* 2番目(中央Scene選択): 90px固定 */
+/* 2番目(中央Point選択): 85px固定 */
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(2),
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(2) {
+    flex: 0 0 85px !important;
+    width: 85px !important;
+    max-width: 85px !important;
+}
+
+/* ★追加: 4番目(スコア表示): 残りの横幅全体を使って右寄せ表示 */
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(4),
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(4) {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(2),
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(2) {
     flex: 0 0 90px !important;
@@ -458,7 +599,6 @@ st.markdown("""
     max-width: 90px !important;
 }
 
-/* ボタンのスタイル統一 */
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
     height: 40px !important;
     padding: 0 !important;
@@ -471,13 +611,11 @@ st.markdown("""
     padding-top: 0px !important;
 }
 
-/* スマホ表示時（768px以下）：コート画像を中央寄せで適度な大きさに縮小 */
 @media (max-width: 768px) {
-    div[data-testid="stImage"],
-    div[data-testid="stpyplot"],
-    div[data-testid="stPlotlyChart"],
-    div.element-container:has(figure) {
-        width: 68% !important;
+    [data-testid="stPlotlyChart"],
+    div.element-container:has(figure),
+    [data-testid="stImage"] {
+        width: 70% !important;
         margin-left: auto !important;
         margin-right: auto !important;
     }
@@ -485,41 +623,57 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ナビゲーションUI（以前の実績に基づいた3カラム構成）
-col_prev, col_sel, col_next = st.columns([1, 2, 1])
+# 現在選択されているポイントのデータを先に抽出
+selected_point = point_list[st.session_state.current_point_idx]
+p_shots = shots_df[shots_df['Point'] == selected_point].sort_values('Shot').copy()
+p_info = full_meta_df[full_meta_df['Point'] == selected_point].iloc[0]
+
+# 4カラム横並び配置（◀, Point#, ▶, スコア）
+col_prev, col_sel, col_next, col_score = st.columns([1, 2, 1, 8])
+
 with col_prev:
-    st.button("◀", key="main_prev", on_click=go_prev_scene, use_container_width=True)
+    st.button("◀", key="main_prev", on_click=go_prev_pt, use_container_width=True)
+
 with col_sel:
-    st.selectbox("Scene #", options=scene_list, key="main_scene_select", on_change=on_main_select, label_visibility="collapsed")
+    st.selectbox(
+        "Point #",
+        options=point_list,
+        key="main_pt_select",
+        on_change=on_main_select,
+        label_visibility="collapsed"
+    )
+
 with col_next:
-    st.button("▶", key="main_next", on_click=go_next_scene, use_container_width=True)
+    st.button("▶", key="main_next", on_click=go_next_pt, use_container_width=True)
 
-selected_scene = scene_list[st.session_state.cur_scene_idx]
-s_info = full_meta_df[full_meta_df['Scene'] == selected_scene].iloc[0]
-s_shots = shots_dict.get(selected_scene, pd.DataFrame())
+with col_score:
+    score_text = p_info['Display_Score']
+    outcome_badge = "🟢" if p_info['Point_Outcome'] == "取った" else "🔴"
+    st.markdown(f"""
+    <div style="font-size: 11px; color: #94a3b8; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 40px; margin-left: 6px;">
+        <span style="color: #f8fafc; font-weight: bold;">{score_text}</span> ｜ {outcome_badge}
+    </div>
+    """, unsafe_allow_html=True)
 
+# ----------------------------------------------------
+# 左右2分割（PC：左コート・右詳細 / スマホ：上コート・下詳細）
+# ----------------------------------------------------
 col_court, col_info = st.columns([1.1, 1.0])
 
 # ====================================================
-# 【左側】コート描画
+# 【コート描画】
 # ====================================================
 with col_court:
     NET_Y = 11.885
-    focal_shots = s_shots[s_shots['Player'] == target_player]
-    opp_shots = s_shots[s_shots['Player'] != target_player]
-    
-    # 手前・奥の判定（相手のみのフォールト時も正確に判定）
+    focal_shots = p_shots[p_shots['Player'] == target_player]
     is_far = False
     if not focal_shots.empty:
         if focal_shots['Hit (y)'].mean() > NET_Y:
             is_far = True
-    elif not opp_shots.empty:
-        if opp_shots['Hit (y)'].mean() < NET_Y:
-            is_far = True
 
     records = []
-    for idx, row in s_shots.iterrows():
-        s_num = int(row.get('Shot_Display', row.get('Shot', 1)))
+    for idx, row in p_shots.iterrows():
+        s_num = int(row['Shot'])
         hx, hy = row['Hit (x)'], row['Hit (y)']
         bx, by = row['Bounce (x)'], row['Bounce (y)']
         if is_far:
@@ -540,7 +694,6 @@ with col_court:
     fig, ax = plt.subplots(figsize=(5.5, 9.5), facecolor='#0f172a')
     ax.set_facecolor('#0f172a')
 
-    # コートライン描画
     rect_court = patches.Rectangle((-5.485, 0), 10.97, 23.77, linewidth=2, edgecolor='#64748b', facecolor='#1e3a8a', alpha=0.9)
     ax.add_patch(rect_court)
     rect_singles = patches.Rectangle((-4.115, 0), 8.23, 23.77, linewidth=1.5, edgecolor='#cbd5e1', facecolor='none')
@@ -564,6 +717,7 @@ with col_court:
         is_net = (cur['result'] == 'NET')
         target_x, target_y = cur['bx'], cur['by']
         annotation_c = c
+
         speed_color = get_speed_color(cur.get('speed', 0))
 
         if is_net:
@@ -619,9 +773,8 @@ with col_court:
                 ha='center', va='center', zorder=7,
                 bbox=dict(boxstyle='round,pad=0.25', facecolor='#0f172a', edgecolor=bbox_c, alpha=0.9))
 
-    near_label = f"NEAR: {target_player}"
-    ax.text(0, -2.0, near_label, color='#38bdf8', fontsize=11, fontweight='bold', ha='center', fontfamily=selected_font)
-    ax.text(0, 25.2, "FAR: OPPONENT", color='#fb923c', fontsize=11, fontweight='bold', ha='center')
+    ax.text(0, -2.0, f"NEAR: {target_player}", color='#38bdf8', fontsize=12, fontweight='bold', ha='center')
+    ax.text(0, 25.2, "FAR: OPPONENT", color='#fb923c', fontsize=12, fontweight='bold', ha='center')
 
     ax.set_xlim(-6.8, 6.8)
     ax.set_ylim(-3.5, 27.2)
@@ -631,24 +784,21 @@ with col_court:
     st.pyplot(fig, use_container_width=True)
 
 # ====================================================
-# 【右側】概要 ＆ ショット詳細
+# 【概要 ＆ ショット詳細】
 # ====================================================
 with col_info:
-    st.write(f"**🎾 スコア:** {s_info['Score']}")
-    st.write(f"**📌 概要**")
-    st.write(f"**勝敗:** {s_info['Point_Outcome']}")
-    st.write(f"**ラリー打数:** {s_info['Total_Shots']} 打 ｜ **決まり方:** {s_info['Finish_Type']}")
-    st.write(f"**決着展開:** {s_info['Detail']}")
+    st.subheader(f"📌 Point {selected_point}")
+    st.metric(label="ポイント勝敗", value=p_info['Point_Outcome'])
+    st.write(f"**ラリー打数:** {p_info['Total_Shots']} 打 ｜ **決まり方:** {p_info['Finish_Type']}")
+    st.write(f"**決着展開:** {p_info['Detail']}")
+    if p_info['Key_Category'] != 'なし':
+        st.write(f"**手前のキーショット:** {p_info['Key_Category']} ({p_info['Key_Type']} / {p_info['Key_Course']})")
 
     st.write("---")
-    st.write("**ショット詳細**")
-    if not s_shots.empty:
-        display_df = s_shots.copy()
-        display_df['Stroke'] = display_df['Stroke'].apply(translate_stroke)
-        display_df['Result'] = display_df['Result'].apply(translate_result)
-        display_df['Shot_No'] = display_df.get('Shot_Display', display_df['Shot'])
+    st.write("##### ショット詳細")
+    display_df = p_shots.copy()
+    display_df['Stroke'] = display_df['Stroke'].apply(translate_stroke)
+    display_df['Result'] = display_df['Result'].apply(translate_result)
 
-        cols_to_show = ['Shot_No', 'Player', 'Stroke', 'Speed (KM/H)', 'Direction', 'Result']
-        st.dataframe(display_df[[c for c in cols_to_show if c in display_df.columns]], use_container_width=True, hide_index=True)
-    else:
-        st.info("このシーンに対応するショット詳細がありません。")
+    cols_to_show = ['Shot', 'Player', 'Stroke', 'Speed (KM/H)', 'Direction', 'Result']
+    st.dataframe(display_df[[c for c in cols_to_show if c in display_df.columns]], use_container_width=True, hide_index=True)
