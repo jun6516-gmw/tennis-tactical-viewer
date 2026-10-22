@@ -107,7 +107,7 @@ st.sidebar.header("👤 プレイヤー視点設定")
 target_player = st.sidebar.selectbox("手前側に固定するプレイヤーを選択", players, index=0)
 
 # ----------------------------------------------------
-# シーン構築 & スコア統合処理（Letを完全スキップ）
+# シーン構築 & スコア統合処理（Letスキップ、1st Fault対応）
 # ----------------------------------------------------
 PT_MAP = {0: "0", 1: "15", 2: "30", 3: "40"}
 
@@ -136,18 +136,29 @@ def build_match_scenes_dataset(shots, points, focus_player):
             score_str = f"Set {set_num} | Game {game_num} ({h_score}-{g_score})"
             
             winner = str(pt_row.get('Point Winner', ''))
-            point_outcome = "取った" if winner == focus_player else "落とした"
             detail = str(pt_row.get('Detail', ''))
-            
-            finish_type = "その他"
-            if "アウト" in detail or "out" in detail.lower():
-                finish_type = "アウト"
-            elif "ネット" in detail or "net" in detail.lower():
-                finish_type = "ネット"
-            elif "エース" in detail or "ace" in detail.lower():
-                finish_type = "エース"
-            elif "ウィナー" in detail or "winner" in detail.lower():
-                finish_type = "ウィナー"
+
+            # 1st Fault判定
+            is_1st_fault = False
+            if len(sub_shots) == 1:
+                first_s = sub_shots.iloc[0]
+                if 'first_serve' in str(first_s.get('Type', '')) and first_s['Result'] in ['ネット', 'アウト']:
+                    is_1st_fault = True
+
+            if is_1st_fault:
+                point_outcome = "-"
+                finish_type = "1st Fault"
+            else:
+                point_outcome = "取った" if winner == focus_player else "落とした"
+                finish_type = "その他"
+                if "アウト" in detail or "out" in detail.lower():
+                    finish_type = "アウト"
+                elif "ネット" in detail or "net" in detail.lower():
+                    finish_type = "ネット"
+                elif "エース" in detail or "ace" in detail.lower():
+                    finish_type = "エース"
+                elif "ウィナー" in detail or "winner" in detail.lower():
+                    finish_type = "ウィナー"
 
             dataset.append({
                 'Scene': scene_id,
@@ -159,7 +170,7 @@ def build_match_scenes_dataset(shots, points, focus_player):
                 'Shots_DF': sub_shots
             })
 
-    # B. Pointsシートが無い場合のフォールバック（Shotsシートから通し計算、Letスキップ）
+    # B. Pointsシートが無い場合のフォールバック（Shotsシートから通し計算）
     else:
         # ノイズ（Shot 0）を除外
         valid_p_ids = []
@@ -212,7 +223,7 @@ def build_match_scenes_dataset(shots, points, focus_player):
                             if dt < 15.0 and next_f['Player'] == server and 'second_serve' in str(next_f.get('Type', '')):
                                 is_let = True
 
-            # レットの場合は表示リストにも含めず完全にスキップ
+            # レットの場合は完全スキップ
             if is_let:
                 continue
 
@@ -237,7 +248,8 @@ def build_match_scenes_dataset(shots, points, focus_player):
                     g_w, g_l = 0, 0
 
             cur_server = server
-            prev_won = item['Won']
+            if not is_1st_fault:
+                prev_won = item['Won']
             is_tb = (g_w == 6 and g_l == 6)
 
             if is_tb:
@@ -254,16 +266,21 @@ def build_match_scenes_dataset(shots, points, focus_player):
             grp_copy = grp.copy()
             grp_copy['Shot_Display'] = grp_copy['Shot']
 
+            # 1st Faultの場合は勝敗を「-」にする
+            final_outcome = "-" if is_1st_fault else item['Outcome']
+            final_finish = "1st Fault" if is_1st_fault else item['Finish']
+
             dataset.append({
                 'Scene': item['Scene'],
                 'Score': score_text,
-                'Point_Outcome': item['Outcome'],
-                'Finish_Type': item['Finish'],
+                'Point_Outcome': final_outcome,
+                'Finish_Type': final_finish,
                 'Total_Shots': len(grp),
                 'Detail': item['Detail'],
                 'Shots_DF': grp_copy
             })
 
+            # スコア加算
             if not is_1st_fault:
                 if item['Won']:
                     p_w += 1
@@ -297,12 +314,16 @@ st.sidebar.header("🔍 フィルタ設定")
 c_all = len(full_meta_df)
 c_won = len(full_meta_df[full_meta_df['Point_Outcome'] == '取った'])
 c_lost = len(full_meta_df[full_meta_df['Point_Outcome'] == '落とした'])
+c_none = len(full_meta_df[full_meta_df['Point_Outcome'] == '-'])
 
 outcome_map = {
     f"すべて ({c_all})": "すべて",
     f"取った ({c_won})": "取った",
     f"落とした ({c_lost})": "落とした"
 }
+if c_none > 0:
+    outcome_map[f"- / 1st Fault ({c_none})"] = "-"
+
 chosen_outcome_label = st.sidebar.selectbox("■ シーン勝敗", list(outcome_map.keys()))
 sel_outcome = outcome_map[chosen_outcome_label]
 
@@ -533,7 +554,7 @@ with col_court:
     st.pyplot(fig, use_container_width=True)
 
 # ====================================================
-# 【右側】概要 ＆ ショット詳細（スコア主役・不要な番号削除）
+# 【右側】概要 ＆ ショット詳細
 # ====================================================
 with col_info:
     st.write(f"**🎾 スコア:** {s_info['Score']}")
