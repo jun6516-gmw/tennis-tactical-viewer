@@ -107,7 +107,7 @@ st.sidebar.header("👤 プレイヤー視点設定")
 target_player = st.sidebar.selectbox("手前側に固定するプレイヤーを選択", players, index=0)
 
 # ----------------------------------------------------
-# シーン構築 & スコア統合処理（Letスキップ、1st Fault対応）
+# シーン構築 & スコア統合処理（Letを完全スキップ）
 # ----------------------------------------------------
 PT_MAP = {0: "0", 1: "15", 2: "30", 3: "40"}
 
@@ -211,7 +211,7 @@ def build_match_scenes_dataset(shots, points, focus_player):
 
             is_1st_fault = (len(grp) == 1 and 'first_serve' in str(first_s.get('Type', '')) and first_s['Result'] in ['ネット', 'アウト'])
             
-            # レット判定
+            # 1. 典型的なレット判定（1打のみイン、15秒以内に同一サーバーが再サーブ）
             is_let = False
             if len(grp) == 1 and 'サーブ' in str(first_s['Stroke']) and first_s['Result'] == 'イン':
                 if idx + 1 < len(temp_scenes):
@@ -223,11 +223,30 @@ def build_match_scenes_dataset(shots, points, focus_player):
                             if dt < 15.0 and next_f['Player'] == server and 'second_serve' in str(next_f.get('Type', '')):
                                 is_let = True
 
-            # レットの場合は完全スキップ
+            # 2. ゲームポイントでの見かけ上の決着矛盾によるレット判定
+            # 例: 40-15でサーブ側が得点して本来ゲーム終了のはずなのに、同一サーバーが次もサーブを打っている場合
+            is_tb = (g_w == 6 and g_l == 6)
+            if not is_1st_fault and not is_let and not is_tb:
+                # このポイントを取るとゲーム終了になるか？
+                will_game_end = False
+                if item['Won'] and p_w >= 3 and (p_w + 1 - p_l >= 2):
+                    will_game_end = True
+                elif not item['Won'] and p_l >= 3 and (p_l + 1 - p_w >= 2):
+                    will_game_end = True
+
+                if will_game_end and idx + 1 < len(temp_scenes):
+                    next_grp = temp_scenes[idx + 1]['Shots']
+                    if not next_grp.empty:
+                        next_server = str(next_grp.iloc[0]['Player'])
+                        # ゲーム終了のはずなのにサーバーが変わっていない -> レット（やり直し）とみなしてスキップ
+                        if next_server == server:
+                            is_let = True
+
+            # レットの場合は完全スキップ（リストに含めない）
             if is_let:
                 continue
 
-            is_tb = (g_w == 6 and g_l == 6)
+            # サーバー交代でゲーム移行
             if not is_tb and cur_server is not None and server != cur_server:
                 if p_w > p_l:
                     g_w += 1
@@ -266,7 +285,6 @@ def build_match_scenes_dataset(shots, points, focus_player):
             grp_copy = grp.copy()
             grp_copy['Shot_Display'] = grp_copy['Shot']
 
-            # 1st Faultの場合は勝敗を「-」にする
             final_outcome = "-" if is_1st_fault else item['Outcome']
             final_finish = "1st Fault" if is_1st_fault else item['Finish']
 
