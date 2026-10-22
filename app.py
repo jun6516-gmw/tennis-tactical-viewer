@@ -1,14 +1,25 @@
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Nav Test", layout="centered")
 
 # テスト用シーンデータ
 scene_list = list(range(1, 31))
-# テスト用短縮スコア
 dummy_scores = {i: f"0-0 | {i//6}-{i%6} | {15*(i%4)}-{15*((i+1)%4)}" for i in scene_list}
 
 if "cur_idx" not in st.session_state:
-    st.session_state.cur_idx = 7  # 初期値
+    st.session_state.cur_idx = 7  # 初期値: Scene 8
+
+# クエリパラメータによるセレクト変更検知
+query_params = st.query_params
+if "sel_scene" in query_params:
+    try:
+        new_s = int(query_params["sel_scene"])
+        if new_s in scene_list:
+            st.session_state.cur_idx = scene_list.index(new_s)
+    except Exception:
+        pass
+    st.query_params.clear()
 
 def go_prev():
     if st.session_state.cur_idx > 0:
@@ -38,7 +49,7 @@ div[data-testid="stHorizontalBlock"] > div:nth-child(3) {
     flex: 0 0 46px !important;
     width: 46px !important;
 }
-/* 中央のプルダウン幅 */
+/* 中央のセレクト枠 */
 div[data-testid="stHorizontalBlock"] > div:nth-child(2) {
     flex: 1 1 auto !important;
     max-width: 250px !important;
@@ -54,28 +65,61 @@ div[data-testid="stHorizontalBlock"] button {
 
 st.title("Scene ナビゲーション表示")
 
-# ナビゲーションバー
+cur_scene = scene_list[st.session_state.cur_idx]
+
+# ネイティブセレクトボックス用のHTML生成
+options_html = "".join([
+    f'<option value="{s}" {"selected" if s == cur_scene else ""}>Sc.{s} {dummy_scores[s]}</option>'
+    for s in scene_list
+])
+
+native_select_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {{
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}}
+select {{
+    width: 100%;
+    height: 40px;
+    background-color: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 0 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1e293b;
+    outline: none;
+    cursor: pointer;
+    box-sizing: border-box;
+}}
+select:hover {{
+    border-color: #94a3b8;
+}}
+</style>
+</head>
+<body>
+<select onchange="window.parent.location.search = '?sel_scene=' + this.value;">
+{options_html}
+</select>
+</body>
+</html>
+"""
+
 col1, col2, col3 = st.columns([1, 4, 1], gap="small")
 with col1:
     st.button("◀", key="btn_prev", on_click=go_prev, use_container_width=True)
 
 with col2:
-    # 選択位置のずれを防ぐため、動的なキーで直接現在位置を束縛
-    chosen_scene = st.selectbox(
-        "Scene",
-        options=scene_list,
-        index=st.session_state.cur_idx,
-        format_func=lambda s: f"Sc.{s}  {dummy_scores[s]}",
-        key=f"scene_selector_{st.session_state.cur_idx}",
-        label_visibility="collapsed"
-    )
-    if chosen_scene != scene_list[st.session_state.cur_idx]:
-        st.session_state.cur_idx = scene_list.index(chosen_scene)
-        st.rerun()
+    components.html(native_select_html, height=42)
 
 with col3:
     st.button("▶", key="btn_next", on_click=go_next, use_container_width=True)
 
-cur_s = scene_list[st.session_state.cur_idx]
 st.write("---")
-st.write(f"### 現在選択中: **Scene {cur_s} ({dummy_scores[cur_s]})**")
+st.write(f"### 現在選択中: **Scene {cur_scene} ({dummy_scores[cur_scene]})**")
