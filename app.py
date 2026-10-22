@@ -56,12 +56,24 @@ uploaded_file = st.sidebar.file_uploader("SwingVisionファイルを選択 (.xls
 
 if uploaded_file is None:
     st.markdown("""
+    <style>
+    /* PC表示（769px以上）：PC用テキストを表示し、スマホ用を非表示 */
+    .msg-pc { display: inline !important; }
+    .msg-sp { display: none !important; }
+
+    /* スマホ表示（768px以下）：スマホ用テキストを表示し、PC用を非表示 */
+    @media (max-width: 768px) {
+        .msg-pc { display: none !important; }
+        .msg-sp { display: inline !important; }
+    }
+    </style>
     <div style="background-color: #f0f7ff; color: #1e3a8a; padding: 14px 16px; border-radius: 8px; border-left: 5px solid #2563eb; margin: 10px 0;">
-        👈 <strong>左側のサイドバーから</strong> SwingVision のデータファイル（Excel または CSV）をアップロードしてください。
+        <span class="msg-pc">👈 <strong>左側のサイドバーから</strong></span>
+        <span class="msg-sp">👆 <strong>上の >> をクリックして</strong></span>
+        SwingVision のデータファイル（Excel または CSV）をアップロードしてください。
     </div>
     """, unsafe_allow_html=True)
     st.stop()
-
 # ----------------------------------------------------
 # 1. 生ファイルの読み込み（キャッシュ化）
 # ----------------------------------------------------
