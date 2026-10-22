@@ -419,34 +419,17 @@ st.markdown("""
 .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem !important; }
 [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
 
-/* ナビゲーションバーの固定（以前の動作実績コード） */
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
+/* ナビゲーションバー：折り返し防止とボタンサイズの統一 */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
-    justify-content: flex-start !important;
     align-items: center !important;
-    gap: 6px !important;
     width: 100% !important;
 }
 
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:first-child,
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:last-child {
-    flex: 0 0 44px !important;
-    width: 44px !important;
-    max-width: 44px !important;
-    min-width: 44px !important;
-}
-
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(2) {
-    flex: 0 0 230px !important;
-    width: 230px !important;
-    max-width: 230px !important;
-    min-width: 230px !important;
-}
-
-[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
-    height: 38px !important;
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
+    height: 42px !important;
     padding: 0 !important;
     font-size: 16px !important;
     font-weight: bold !important;
@@ -498,8 +481,8 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
 </style>
 """, unsafe_allow_html=True)
 
-# ナビゲーションUI
-col_prev, col_sel, col_next = st.columns([1, 3, 1])
+# ナビゲーションUI（左右のボタンを小さく、中央を主役に配置）
+col_prev, col_sel, col_next = st.columns([0.6, 2.2, 0.6], gap="small")
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_scene, use_container_width=True)
 with col_sel:
