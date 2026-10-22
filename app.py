@@ -419,31 +419,39 @@ st.markdown("""
 .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem !important; }
 [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
 
-/* ナビゲーションバー：折り返し防止とボタンサイズの統一 */
+/* ナビゲーションバー：折り返しを禁止し、ボタン幅を固定して中央を展開 */
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
+    gap: 6px !important;
     width: 100% !important;
+    max-width: 280px !important;
 }
 
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
-    height: 42px !important;
-    padding: 0 !important;
-    font-size: 16px !important;
-    font-weight: bold !important;
+/* 左右のカラムを強制解除 */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div {
+    min-width: 0 !important;
 }
 
-/* 中央の Scene プルダウンの枠幅（残りを自動で埋める設定） */
+/* ◀ ボタン（1番目）と ▶ ボタン（3番目）の幅を 44px に固定 */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(1),
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(3) {
+    flex: 0 0 44px !important;
+    width: 44px !important;
+    max-width: 44px !important;
+}
+
+/* 中央のプルダウン（2番目）を残りの幅いっぱいに広げる */
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(2) {
     flex: 1 1 auto !important;
-    max-width: 200px !important;
+    min-width: 110px !important;
 }
 
-/* ボタンの高さ */
+/* ボタンの高さと文字サイズ */
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
-    height: 38px !important;
+    height: 40px !important;
     width: 100% !important;
     padding: 0 !important;
     font-size: 16px !important;
