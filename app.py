@@ -497,7 +497,7 @@ col_prev, col_sel, col_next = st.columns([1, 2, 1])
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_scene, use_container_width=True)
 with col_sel:
-    st.selectbox("Scene #", options=scene_list, format_func=lambda x: f"Scene {x}", key="main_scene_select", on_change=on_main_select, label_visibility="collapsed")
+    st.selectbox("Scene #", options=scene_list, key="main_scene_select", on_change=on_main_select, label_visibility="collapsed")
 with col_next:
     st.button("▶", key="main_next", on_click=go_next_scene, use_container_width=True)
 
