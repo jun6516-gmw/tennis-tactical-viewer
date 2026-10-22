@@ -426,7 +426,7 @@ for s_id in scene_list:
         scene_display_labels[s_id] = raw_score
 
 # ----------------------------------------------------
-# CSS: 1行横並び固定 ＆ スコア表示幅（240px）＆ スマホ時コート縮小
+# CSS: 1行横並び固定 ＆ スコア幅確保 ＆ PCドロップダウン自動追従
 # ----------------------------------------------------
 st.markdown("""
 <style>
@@ -476,7 +476,16 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
     font-weight: bold !important;
 }
 
-/* 6. スマホ表示時（768px以下）：コート画像を中央寄せで適度な大きさに縮小 */
+/* 6. ★ PCブラウザ対策：ドロップダウンリストで選択中の要素まで自動スクロール追従 */
+ul[role="listbox"] {
+    scroll-behavior: auto !important;
+}
+ul[role="listbox"] li[aria-selected="true"] {
+    scroll-margin-top: 40px !important;
+    scroll-margin-bottom: 40px !important;
+}
+
+/* 7. スマホ表示時（768px以下）：コート画像を中央寄せで適度な大きさに縮小 */
 @media (max-width: 768px) {
     div[data-testid="stImage"],
     div[data-testid="stpyplot"],
@@ -491,13 +500,38 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# ナビゲーションUI（現在位置追従・同期バグを完全解消）
+# PCブラウザ用：ドロップダウン展開時に選択中アイテムを視界に引き戻す追従スクリプト
+# ----------------------------------------------------
+st.components.v1.html("""
+<script>
+const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+            if (node.nodeType === 1) {
+                const listbox = node.querySelector ? (node.getAttribute('role') === 'listbox' ? node : node.querySelector('ul[role="listbox"]')) : null;
+                if (listbox) {
+                    setTimeout(() => {
+                        const selected = listbox.querySelector('li[aria-selected="true"]');
+                        if (selected) {
+                            selected.scrollIntoView({ block: 'nearest' });
+                        }
+                    }, 20);
+                }
+            }
+        }
+    }
+});
+observer.observe(window.parent.document.body, { childList: true, subtree: true });
+</script>
+""", height=0, width=0)
+
+# ----------------------------------------------------
+# ナビゲーションUI
 # ----------------------------------------------------
 col_prev, col_sel, col_next = st.columns([1, 2, 1], gap="small")
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_scene, use_container_width=True)
 with col_sel:
-    # keyを排して戻り値を直接受け取ることで、常に正確な現在のインデックスに同期
     selected_scene = st.selectbox(
         "Scene",
         options=scene_list,
@@ -505,7 +539,6 @@ with col_sel:
         format_func=lambda s: scene_display_labels.get(s, f"Sc.{s}"),
         label_visibility="collapsed"
     )
-    # プルダウンから選ばれた場合はインデックスを更新
     if selected_scene != scene_list[st.session_state.cur_scene_idx]:
         st.session_state.cur_scene_idx = scene_list.index(selected_scene)
         st.rerun()
