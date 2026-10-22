@@ -57,7 +57,7 @@ uploaded_file = st.sidebar.file_uploader("SwingVisionファイルを選択 (.xls
 if uploaded_file is None:
     st.markdown("""
     <div style="background-color: #f0f7ff; color: #1e3a8a; padding: 14px 16px; border-radius: 8px; border-left: 5px solid #2563eb; margin: 10px 0;">
-        👈 <strong>左側のサイドバーから</strong> SwingVision のデータファイル（未加工の Excel または CSV）をアップロードしてください。
+        👈 <strong>左側のサイドバーから</strong> SwingVision のデータファイル（Excel または CSV）をアップロードしてください。
     </div>
     """, unsafe_allow_html=True)
     st.stop()
@@ -137,7 +137,6 @@ def process_and_cache_dataset(shots, points, focus_player):
             winner = str(pt_row.get('Point Winner', ''))
             detail = str(pt_row.get('Detail', ''))
 
-            # 1st Fault判定
             is_1st_fault = False
             if len(sub_shots) == 1:
                 first_s = sub_shots.iloc[0]
@@ -173,7 +172,6 @@ def process_and_cache_dataset(shots, points, focus_player):
 
     # B. Pointsシートが無い場合のフォールバック（Shotsシートから通しシミュレーション）
     else:
-        # ノイズ（Shot 0）を除外
         valid_p_ids = []
         for p_id, grp in shots.groupby('Point'):
             f_row = grp.sort_values('Shot').iloc[0]
@@ -213,7 +211,6 @@ def process_and_cache_dataset(shots, points, focus_player):
 
             is_1st_fault = (len(grp) == 1 and 'first_serve' in str(first_s.get('Type', '')) and first_s['Result'] in ['ネット', 'アウト'])
 
-            # レット判定（1打のみイン、15秒以内に再サーブ）
             is_let = False
             if len(grp) == 1 and 'サーブ' in str(first_s['Stroke']) and first_s['Result'] == 'イン':
                 if idx + 1 < len(temp_scenes):
@@ -225,7 +222,6 @@ def process_and_cache_dataset(shots, points, focus_player):
                             if dt < 15.0 and next_f['Player'] == server and 'second_serve' in str(next_f.get('Type', '')):
                                 is_let = True
 
-            # ゲームポイント決着矛盾によるレット判定
             is_tb = (g_w == 6 and g_l == 6)
             if not is_1st_fault and not is_let and not is_tb:
                 will_game_end = False
@@ -242,7 +238,6 @@ def process_and_cache_dataset(shots, points, focus_player):
             if is_let:
                 continue
 
-            # サーバー交代でゲーム移行
             if not is_tb and cur_server is not None and server != cur_server:
                 if p_w > p_l:
                     g_w += 1
@@ -312,7 +307,7 @@ def process_and_cache_dataset(shots, points, focus_player):
 
     return dataset
 
-# 前処理の実行（初回のみ走る）
+# 前処理の実行（初回のみ）
 with st.spinner("試合データを解析・最適化中..."):
     match_scenes = process_and_cache_dataset(shots_raw, points_raw, target_player)
 
@@ -324,7 +319,7 @@ full_meta_df = pd.DataFrame([{k: v for k, v in item.items() if k != 'Shots_DF'} 
 shots_dict = {item['Scene']: item['Shots_DF'] for item in match_scenes}
 
 # ----------------------------------------------------
-# サイドバー: フィルタ ＆ 加工済みデータ保存機能
+# サイドバー: フィルタ ＆ ダウンロード
 # ----------------------------------------------------
 st.sidebar.header("🔍 フィルタ設定")
 
@@ -371,7 +366,6 @@ if "last_filter_sig" not in st.session_state or st.session_state.last_filter_sig
 if "cur_scene_idx" not in st.session_state or st.session_state.cur_scene_idx >= len(scene_list):
     st.session_state.cur_scene_idx = 0
 
-# 加工済みデータのダウンロードボタン
 st.sidebar.markdown("---")
 st.sidebar.header("📥 データ出力")
 csv_buffer = io.StringIO()
@@ -405,12 +399,15 @@ def on_main_select():
     if chosen in scene_list:
         st.session_state.cur_scene_idx = scene_list.index(chosen)
 
-# CSS: ナビゲーションバーの固定
+# ----------------------------------------------------
+# CSS: スマホ時のコート縮小 ＆ ナビゲーションの固定
+# ----------------------------------------------------
 st.markdown("""
 <style>
 .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem !important; }
 [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
 
+/* ナビゲーションバーの固定 */
 [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
     display: flex !important;
     flex-direction: row !important;
@@ -436,15 +433,21 @@ st.markdown("""
     font-weight: bold !important;
 }
 
+/* スマホ表示時（768px以下）：コート画像を中央寄せで適度な大きさに縮小 */
 @media (max-width: 768px) {
-    [data-testid="stPlotlyChart"], div.element-container:has(figure) {
-        width: 80% !important; margin-left: auto !important; margin-right: auto !important;
+    div[data-testid="stImage"],
+    div[data-testid="stpyplot"],
+    div[data-testid="stPlotlyChart"],
+    div.element-container:has(figure) {
+        width: 68% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
     }
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ナビゲーションUI（3カラム）
+# ナビゲーションUI
 col_prev, col_sel, col_next = st.columns([1, 2, 1])
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_scene, use_container_width=True)
@@ -467,13 +470,12 @@ with col_court:
     focal_shots = s_shots[s_shots['Player'] == target_player]
     opp_shots = s_shots[s_shots['Player'] != target_player]
     
+    # 手前・奥の判定（相手のみのフォールト時も正確に判定）
     is_far = False
     if not focal_shots.empty:
-        # 川端選手の打球がある場合：川端選手が奥側(Y > NET_Y)にいれば反転
         if focal_shots['Hit (y)'].mean() > NET_Y:
             is_far = True
     elif not opp_shots.empty:
-        # 川端選手の打球がない場合（相手の1stフォールト等）：相手が手前側(Y < NET_Y)にいれば川端選手は奥にいるので反転
         if opp_shots['Hit (y)'].mean() < NET_Y:
             is_far = True
 
