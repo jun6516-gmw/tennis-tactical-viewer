@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import io
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.font_manager as fm
@@ -56,23 +57,21 @@ uploaded_file = st.sidebar.file_uploader("SwingVisionファイルを選択 (.xls
 if uploaded_file is None:
     st.markdown("""
     <div style="background-color: #f0f7ff; color: #1e3a8a; padding: 14px 16px; border-radius: 8px; border-left: 5px solid #2563eb; margin: 10px 0;">
-        👈 <strong>左側のサイドバーから</strong> SwingVision のデータファイル（Excel または CSV）をアップロードしてください。
+        👈 <strong>左側のサイドバーから</strong> SwingVision のデータファイル（未加工の Excel または CSV）をアップロードしてください。
     </div>
     """, unsafe_allow_html=True)
     st.stop()
 
-if st.sidebar.button("🔄 キャッシュをクリアして再読込"):
-    st.cache_data.clear()
-    st.rerun()
-
-def load_all_sheets(file):
+# ----------------------------------------------------
+# 1. 生ファイルの読み込み（キャッシュ化）
+# ----------------------------------------------------
+@st.cache_data
+def load_raw_data(file_bytes, file_name):
     shots = pd.DataFrame()
     points = pd.DataFrame()
-    games = pd.DataFrame()
 
-    if file.name.endswith(".xlsx"):
-        file.seek(0)
-        xls = pd.ExcelFile(file)
+    if file_name.endswith(".xlsx"):
+        xls = pd.ExcelFile(io.BytesIO(file_bytes))
         if "Shots" in xls.sheet_names:
             shots = pd.read_excel(xls, sheet_name="Shots")
         else:
@@ -80,25 +79,23 @@ def load_all_sheets(file):
             
         if "Points" in xls.sheet_names:
             points = pd.read_excel(xls, sheet_name="Points")
-        if "Games" in xls.sheet_names:
-            games = pd.read_excel(xls, sheet_name="Games")
     else:
-        file.seek(0)
-        shots = pd.read_csv(file)
+        shots = pd.read_csv(io.BytesIO(file_bytes))
 
-    return shots, points, games
+    return shots, points
 
+raw_bytes = uploaded_file.getvalue()
 try:
-    shots_df, points_df, games_df = load_all_sheets(uploaded_file)
+    shots_raw, points_raw = load_raw_data(raw_bytes, uploaded_file.name)
 except Exception as e:
     st.error(f"ファイルの読み込みに失敗しました: {e}")
     st.stop()
 
-if shots_df.empty:
+if shots_raw.empty:
     st.error("Shotsデータが存在しません。")
     st.stop()
 
-players = [p for p in shots_df['Player'].dropna().unique().tolist() if str(p).strip()]
+players = [p for p in shots_raw['Player'].dropna().unique().tolist() if str(p).strip()]
 if not players:
     st.error("有効なPlayerデータが存在しません。")
     st.stop()
@@ -107,34 +104,36 @@ st.sidebar.header("👤 プレイヤー視点設定")
 target_player = st.sidebar.selectbox("手前側に固定するプレイヤーを選択", players, index=0)
 
 # ----------------------------------------------------
-# シーン構築 & スコア統合処理（Letを完全スキップ）
+# 2. 自動前処理・加工エンジン（初回のみ実行＆キャッシュ）
 # ----------------------------------------------------
 PT_MAP = {0: "0", 1: "15", 2: "30", 3: "40"}
 
-def build_match_scenes_dataset(shots, points, focus_player):
+@st.cache_data
+def process_and_cache_dataset(shots, points, focus_player):
     dataset = []
 
-    # A. Pointsシートが存在する場合（公式スコア優先）
+    # A. Pointsシートがありデータ行も入っている場合
     if not points.empty and len(points) > 0 and 'Video Time' in points.columns:
+        scene_counter = 1
         for idx, pt_row in points.iterrows():
-            scene_id = int(pt_row['Point'])
+            orig_p_id = int(pt_row['Point'])
             end_t = float(pt_row['Video Time'])
             dur = float(pt_row.get('Duration', 0.0))
             start_t = max(0.0, end_t - dur - 1.2) if dur > 0 else max(0.0, end_t - 8.0)
-            
+
             sub_shots = shots[(shots['Video Time'] >= start_t) & (shots['Video Time'] <= end_t + 1.2)].copy()
             if sub_shots.empty:
-                sub_shots = shots[shots['Point'] == scene_id].copy()
-                
+                sub_shots = shots[shots['Point'] == orig_p_id].copy()
+
             sub_shots = sub_shots.sort_values('Video Time')
             sub_shots['Shot_Display'] = range(1, len(sub_shots) + 1)
-            
+
             h_score = str(pt_row.get('Host Game Score', '0'))
             g_score = str(pt_row.get('Guest Game Score', '0'))
             game_num = pt_row.get('Game', 1)
             set_num = pt_row.get('Set', 1)
             score_str = f"Set {set_num} | Game {game_num} ({h_score}-{g_score})"
-            
+
             winner = str(pt_row.get('Point Winner', ''))
             detail = str(pt_row.get('Detail', ''))
 
@@ -161,7 +160,8 @@ def build_match_scenes_dataset(shots, points, focus_player):
                     finish_type = "ウィナー"
 
             dataset.append({
-                'Scene': scene_id,
+                'Scene': scene_counter,
+                'Orig_Point': orig_p_id,
                 'Score': score_str,
                 'Point_Outcome': point_outcome,
                 'Finish_Type': finish_type,
@@ -169,8 +169,9 @@ def build_match_scenes_dataset(shots, points, focus_player):
                 'Detail': detail if detail else f"Winner: {winner}",
                 'Shots_DF': sub_shots
             })
+            scene_counter += 1
 
-    # B. Pointsシートが無い場合のフォールバック（Shotsシートから通し計算）
+    # B. Pointsシートが無い場合のフォールバック（Shotsシートから通しシミュレーション）
     else:
         # ノイズ（Shot 0）を除外
         valid_p_ids = []
@@ -188,9 +189,9 @@ def build_match_scenes_dataset(shots, points, focus_player):
             last_res = translate_result(last_s['Result'])
             won = (last_p == focus_player and last_res == "IN") or (last_p != focus_player and last_res in ["OUT", "NET"])
             f_type = "アウト" if last_res == "OUT" else ("ネット" if last_res == "NET" else "エース")
-            
+
             temp_scenes.append({
-                'Scene': int(p_id),
+                'Orig_Point': int(p_id),
                 'Won': won,
                 'Outcome': "取った" if won else "落とした",
                 'Finish': f_type,
@@ -203,6 +204,7 @@ def build_match_scenes_dataset(shots, points, focus_player):
         p_w, p_l = 0, 0
         cur_server = None
         prev_won = True
+        scene_counter = 1
 
         for idx, item in enumerate(temp_scenes):
             grp = item['Shots']
@@ -210,8 +212,8 @@ def build_match_scenes_dataset(shots, points, focus_player):
             server = str(first_s['Player'])
 
             is_1st_fault = (len(grp) == 1 and 'first_serve' in str(first_s.get('Type', '')) and first_s['Result'] in ['ネット', 'アウト'])
-            
-            # 1. 典型的なレット判定（1打のみイン、15秒以内に同一サーバーが再サーブ）
+
+            # レット判定（1打のみイン、15秒以内に再サーブ）
             is_let = False
             if len(grp) == 1 and 'サーブ' in str(first_s['Stroke']) and first_s['Result'] == 'イン':
                 if idx + 1 < len(temp_scenes):
@@ -223,11 +225,9 @@ def build_match_scenes_dataset(shots, points, focus_player):
                             if dt < 15.0 and next_f['Player'] == server and 'second_serve' in str(next_f.get('Type', '')):
                                 is_let = True
 
-            # 2. ゲームポイントでの見かけ上の決着矛盾によるレット判定
-            # 例: 40-15でサーブ側が得点して本来ゲーム終了のはずなのに、同一サーバーが次もサーブを打っている場合
+            # ゲームポイント決着矛盾によるレット判定
             is_tb = (g_w == 6 and g_l == 6)
             if not is_1st_fault and not is_let and not is_tb:
-                # このポイントを取るとゲーム終了になるか？
                 will_game_end = False
                 if item['Won'] and p_w >= 3 and (p_w + 1 - p_l >= 2):
                     will_game_end = True
@@ -236,13 +236,9 @@ def build_match_scenes_dataset(shots, points, focus_player):
 
                 if will_game_end and idx + 1 < len(temp_scenes):
                     next_grp = temp_scenes[idx + 1]['Shots']
-                    if not next_grp.empty:
-                        next_server = str(next_grp.iloc[0]['Player'])
-                        # ゲーム終了のはずなのにサーバーが変わっていない -> レット（やり直し）とみなしてスキップ
-                        if next_server == server:
-                            is_let = True
+                    if not next_grp.empty and str(next_grp.iloc[0]['Player']) == server:
+                        is_let = True
 
-            # レットの場合は完全スキップ（リストに含めない）
             if is_let:
                 continue
 
@@ -258,7 +254,7 @@ def build_match_scenes_dataset(shots, points, focus_player):
                     else:
                         g_l += 1
                 p_w, p_l = 0, 0
-                
+
                 if (g_w >= 6 and g_w - g_l >= 2) or (g_w == 7 and g_l == 5):
                     sets_w += 1
                     g_w, g_l = 0, 0
@@ -283,13 +279,14 @@ def build_match_scenes_dataset(shots, points, focus_player):
             score_text = f"Set {sets_w + 1} | Game {g_w}-{g_l} {pt_str}{tag}"
 
             grp_copy = grp.copy()
-            grp_copy['Shot_Display'] = grp_copy['Shot']
+            grp_copy['Shot_Display'] = range(1, len(grp_copy) + 1)
 
             final_outcome = "-" if is_1st_fault else item['Outcome']
             final_finish = "1st Fault" if is_1st_fault else item['Finish']
 
             dataset.append({
-                'Scene': item['Scene'],
+                'Scene': scene_counter,
+                'Orig_Point': item['Orig_Point'],
                 'Score': score_text,
                 'Point_Outcome': final_outcome,
                 'Finish_Type': final_finish,
@@ -297,8 +294,8 @@ def build_match_scenes_dataset(shots, points, focus_player):
                 'Detail': item['Detail'],
                 'Shots_DF': grp_copy
             })
+            scene_counter += 1
 
-            # スコア加算
             if not is_1st_fault:
                 if item['Won']:
                     p_w += 1
@@ -315,7 +312,9 @@ def build_match_scenes_dataset(shots, points, focus_player):
 
     return dataset
 
-match_scenes = build_match_scenes_dataset(shots_df, points_df, target_player)
+# 前処理の実行（初回のみ走る）
+with st.spinner("試合データを解析・最適化中..."):
+    match_scenes = process_and_cache_dataset(shots_raw, points_raw, target_player)
 
 if not match_scenes:
     st.error("有効なシーンデータが見つかりませんでした。")
@@ -325,7 +324,7 @@ full_meta_df = pd.DataFrame([{k: v for k, v in item.items() if k != 'Shots_DF'} 
 shots_dict = {item['Scene']: item['Shots_DF'] for item in match_scenes}
 
 # ----------------------------------------------------
-# サイドバー: フィルタ
+# サイドバー: フィルタ ＆ 加工済みデータ保存機能
 # ----------------------------------------------------
 st.sidebar.header("🔍 フィルタ設定")
 
@@ -371,6 +370,18 @@ if "last_filter_sig" not in st.session_state or st.session_state.last_filter_sig
 
 if "cur_scene_idx" not in st.session_state or st.session_state.cur_scene_idx >= len(scene_list):
     st.session_state.cur_scene_idx = 0
+
+# 加工済みデータのダウンロードボタン
+st.sidebar.markdown("---")
+st.sidebar.header("📥 データ出力")
+csv_buffer = io.StringIO()
+full_meta_df.to_csv(csv_buffer, index=False)
+st.sidebar.download_button(
+    label="加工済みScene一覧(CSV)を保存",
+    data=csv_buffer.getvalue().encode('utf-8-sig'),
+    file_name="processed_scenes.csv",
+    mime="text/csv"
+)
 
 st.sidebar.markdown("---")
 st.sidebar.header("🎨 表示設定")
