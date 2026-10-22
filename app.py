@@ -448,9 +448,9 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-
 
 /* 中央の Scene プルダウンの枠を 145px に拡張 */
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(2) {
-    flex: 0 0 250px !important;
-    width: 250px !important;
-    max-width: 250px !important;
+    flex: 0 0 230px !important;
+    width: 230px !important;
+    max-width: 230px !important;
 }
 
 /* プルダウン内部の文字余白を調整し、文字隠れを防止 */
