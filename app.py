@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(page_title="Nav Only Test", layout="centered")
 
-# テスト用シーンデータ (1〜30)
+# テスト用データ (1〜30)
 scene_list = list(range(1, 31))
 
 if "cur_idx" not in st.session_state:
@@ -22,11 +22,40 @@ def on_select():
     st.session_state.cur_idx = scene_list.index(st.session_state.scene_select)
 
 # ----------------------------------------------------
-# 最小限の安全なスタイル設定
+# 1行横並び固定のスタイル
 # ----------------------------------------------------
 st.markdown("""
 <style>
-/* ボタンの高さをセレクトボックス（38〜40px）に揃える */
+/* スマホ幅でも縦積みにせず、必ず1行で横並びを維持する */
+div[data-testid="stHorizontalBlock"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+}
+
+/* スマホ用の最小幅（縦積みの原因）を解除 */
+div[data-testid="stHorizontalBlock"] > div {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+}
+
+/* ◀ と ▶ は 46px 固定 */
+div[data-testid="stHorizontalBlock"] > div:nth-child(1),
+div[data-testid="stHorizontalBlock"] > div:nth-child(3) {
+    flex: 0 0 46px !important;
+    width: 46px !important;
+}
+
+/* 中央のセレクトボックス幅 */
+div[data-testid="stHorizontalBlock"] > div:nth-child(2) {
+    flex: 1 1 auto !important;
+    max-width: 180px !important;
+}
+
+/* ボタンの高さ */
 div[data-testid="stHorizontalBlock"] button {
     height: 40px !important;
     padding: 0 !important;
@@ -38,7 +67,7 @@ div[data-testid="stHorizontalBlock"] button {
 
 st.title("Scene ナビゲーション表示")
 
-# 左右ボタンを小さく(1)、中央を広く(2)割り当て
+# ◀ / Scene # / ▶ の横並び配置
 col_prev, col_sel, col_next = st.columns([1, 2, 1], gap="small")
 
 with col_prev:
