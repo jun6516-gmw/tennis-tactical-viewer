@@ -69,11 +69,12 @@ if uploaded_file is None:
     </style>
     <div style="background-color: #f0f7ff; color: #1e3a8a; padding: 14px 16px; border-radius: 8px; border-left: 5px solid #2563eb; margin: 10px 0;">
         <span class="msg-pc">👈 <strong>左側のサイドバーから</strong></span>
-        <span class="msg-sp">👆 <strong>上の >> をクリックして</strong></span>
+        <span class="msg-sp">👆 <strong>上の ＞＞ をクリックして</strong></span>
         SwingVision のデータファイル（Excel または CSV）をアップロードしてください。
     </div>
     """, unsafe_allow_html=True)
     st.stop()
+
 # ----------------------------------------------------
 # 1. 生ファイルの読み込み（キャッシュ化）
 # ----------------------------------------------------
@@ -416,63 +417,58 @@ def on_main_select():
 # ----------------------------------------------------
 st.markdown("""
 <style>
-.block-container { padding-top: 3.5rem !important; padding-bottom: 1rem !important; }
-[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
+.block-container {
+    padding-top: 3.5rem !important;
+    padding-bottom: 1rem !important;
+}
 
-/* ナビゲーションバー：折り返しを禁止し、ボタン幅を固定して中央を展開 */
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
+[data-testid="stVerticalBlock"] {
+    gap: 0.3rem !important;
+}
+
+/* ナビゲーションバーの固定（動作実績コード完全準拠） */
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
     align-items: center !important;
     gap: 6px !important;
     width: 100% !important;
-    max-width: 280px !important;
+    margin-top: 0px !important;
+    margin-bottom: 2px !important;
+    padding-bottom: 0px !important;
 }
 
-/* 左右のカラムを強制解除 */
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div {
-    min-width: 0 !important;
-}
-
-/* ◀ ボタン（1番目）と ▶ ボタン（3番目）の幅を 44px に固定 */
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(1),
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(3) {
+/* 1番目(◀)と3番目(▶)のカラム: 44px固定 */
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:first-child,
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:first-child,
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(3),
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(3) {
     flex: 0 0 44px !important;
     width: 44px !important;
     max-width: 44px !important;
 }
 
-/* 中央のプルダウン（2番目）を残りの幅いっぱいに広げる */
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(2) {
-    flex: 1 1 auto !important;
-    min-width: 110px !important;
+/* 2番目(中央Scene選択): 90px固定 */
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(2),
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"]:nth-child(2) {
+    flex: 0 0 90px !important;
+    width: 90px !important;
+    max-width: 90px !important;
 }
 
-/* ボタンの高さと文字サイズ */
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
+/* ボタンのスタイル統一 */
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
     height: 40px !important;
-    width: 100% !important;
     padding: 0 !important;
     font-size: 16px !important;
     font-weight: bold !important;
 }
 
-/* プルダウン内部の文字余白を調整し、文字隠れを防止 */
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) [data-baseweb="select"] {
-    font-size: 14px !important;
-}
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) [data-baseweb="select"] > div {
-    padding-left: 8px !important;
-    padding-right: 4px !important;
-}
-
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
-    height: 38px !important;
-    width: 100% !important;
-    padding: 0 !important;
-    font-size: 16px !important;
-    font-weight: bold !important;
+[data-testid="stImage"], [data-testid="stPlotlyChart"], div.element-container:has(figure) {
+    margin-top: 0px !important;
+    padding-top: 0px !important;
 }
 
 /* スマホ表示時（768px以下）：コート画像を中央寄せで適度な大きさに縮小 */
@@ -489,8 +485,8 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
 </style>
 """, unsafe_allow_html=True)
 
-# ナビゲーションUI（左右のボタンを小さく、中央を主役に配置）
-col_prev, col_sel, col_next = st.columns([0.6, 2.2, 0.6], gap="small")
+# ナビゲーションUI（以前の実績に基づいた3カラム構成）
+col_prev, col_sel, col_next = st.columns([1, 2, 1])
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_scene, use_container_width=True)
 with col_sel:
