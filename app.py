@@ -419,7 +419,7 @@ st.markdown("""
 .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem !important; }
 [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
 
-/* ナビゲーションバーの固定（スマホでも絶対に1行・横並びを維持） */
+/* ナビゲーションバーの固定（スマホでも1行横並びを維持） */
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
     display: flex !important;
     flex-direction: row !important;
@@ -428,7 +428,7 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
     justify-content: flex-start !important;
     gap: 8px !important;
     width: 100% !important;
-    max-width: 240px !important;
+    max-width: 280px !important; /* 全体幅を拡張 */
 }
 
 /* モバイル時のカラム縦積みを強制解除 */
@@ -438,23 +438,32 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div {
     min-width: 0 !important;
 }
 
-/* ◀ ボタンと ▶ ボタンの幅を固定 */
+/* ◀ ボタンと ▶ ボタンの幅 */
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(1),
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(3) {
-    flex: 0 0 46px !important;
-    width: 46px !important;
-    max-width: 46px !important;
+    flex: 0 0 40px !important;
+    width: 40px !important;
+    max-width: 40px !important;
 }
 
-/* 中央の Scene プルダウンの幅を固定 */
+/* 中央の Scene プルダウンの枠を 145px に拡張 */
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(2) {
-    flex: 0 0 115px !important;
-    width: 115px !important;
-    max-width: 115px !important;
+    flex: 0 0 145px !important;
+    width: 145px !important;
+    max-width: 145px !important;
+}
+
+/* プルダウン内部の文字余白を調整し、文字隠れを防止 */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) [data-baseweb="select"] {
+    font-size: 14px !important;
+}
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) [data-baseweb="select"] > div {
+    padding-left: 8px !important;
+    padding-right: 4px !important;
 }
 
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
-    height: 40px !important;
+    height: 38px !important;
     width: 100% !important;
     padding: 0 !important;
     font-size: 16px !important;
