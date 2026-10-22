@@ -419,31 +419,37 @@ st.markdown("""
 .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem !important; }
 [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
 
-/* ナビゲーションバーの固定（スマホでも1行横並びを維持） */
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
+/* ナビゲーションバーの固定（以前の動作実績コード） */
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
-    align-items: center !important;
     justify-content: flex-start !important;
-    gap: 8px !important;
+    align-items: center !important;
+    gap: 6px !important;
     width: 100% !important;
-    max-width: 100% !important;
 }
 
-/* モバイル時のカラム縦積みを強制解除 */
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div[data-testid="column"],
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div[data-testid="stColumn"],
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div {
-    min-width: 0 !important;
-}
-
-/* ◀ ボタンと ▶ ボタンの幅（各44px） */
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(1),
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(3) {
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:first-child,
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:last-child {
     flex: 0 0 44px !important;
     width: 44px !important;
     max-width: 44px !important;
+    min-width: 44px !important;
+}
+
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="stColumn"]:nth-child(2) {
+    flex: 0 0 100px !important;
+    width: 100px !important;
+    max-width: 100px !important;
+    min-width: 100px !important;
+}
+
+[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
+    height: 38px !important;
+    padding: 0 !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
 }
 
 /* 中央の Scene プルダウンの枠幅（残りを自動で埋める設定） */
@@ -493,7 +499,7 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
 """, unsafe_allow_html=True)
 
 # ナビゲーションUI
-col_prev, col_sel, col_next = st.columns([1, 2, 1])
+col_prev, col_sel, col_next = st.columns([1, 3, 1])
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_scene, use_container_width=True)
 with col_sel:
