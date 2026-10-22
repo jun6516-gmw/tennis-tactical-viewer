@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import io
@@ -378,17 +377,6 @@ if "last_filter_sig" not in st.session_state or st.session_state.last_filter_sig
 if "cur_scene_idx" not in st.session_state or st.session_state.cur_scene_idx >= len(scene_list):
     st.session_state.cur_scene_idx = 0
 
-# ネイティブセレクトボックスからの変更検知
-query_params = st.query_params
-if "sel_scene" in query_params:
-    try:
-        new_s = int(query_params["sel_scene"])
-        if new_s in scene_list:
-            st.session_state.cur_scene_idx = scene_list.index(new_s)
-    except Exception:
-        pass
-    st.query_params.clear()
-
 st.sidebar.markdown("---")
 st.sidebar.header("📥 データ出力")
 csv_buffer = io.StringIO()
@@ -416,7 +404,7 @@ def go_next_scene():
         st.session_state.cur_scene_idx += 1
 
 # ----------------------------------------------------
-# スコアを「1-0 | 1-0 | 0-30」形式に短縮変換する辞書の事前作成
+# スコア短縮辞書の作成（Sc.番号とスコア）
 # ----------------------------------------------------
 scene_display_labels = {}
 for s_id in scene_list:
@@ -433,12 +421,12 @@ for s_id in scene_list:
         pt_part = m.group(3).replace('(', '').replace(')', '').replace('[', '').replace(']', '').replace('1st Fault', '').strip()
         set_score_str = f"{set_num - 1}-0" if set_num > 1 else "0-0"
         tag = " (1F)" if "1st Fault" in raw_score else ""
-        scene_display_labels[s_id] = f"{set_score_str} | {game_part} | {pt_part}{tag}"
+        scene_display_labels[s_id] = f"Sc.{s_id} {set_score_str} | {game_part} | {pt_part}{tag}"
     else:
-        scene_display_labels[s_id] = raw_score
+        scene_display_labels[s_id] = f"Sc.{s_id} {raw_score}"
 
 # ----------------------------------------------------
-# 安全なCSS設定（コート描画カラムを一切阻害しない）
+# CSS: ナビゲーション行のみ横並び固定 ＆ コート描画領域の保護
 # ----------------------------------------------------
 st.markdown("""
 <style>
@@ -451,34 +439,34 @@ st.markdown("""
     gap: 0.3rem !important;
 }
 
-/* ナビゲーション行（iframeを含む行）だけを限定指定して横並びにする */
-div[data-testid="stHorizontalBlock"]:has(iframe) {
+/* ナビゲーション行（selectboxを含む行）だけを限定指定 */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
     align-items: center !important;
     gap: 8px !important;
     width: 100% !important;
-    max-width: 400px !important;
+    max-width: 440px !important;
     margin-bottom: 15px !important;
 }
 
-/* 左右ボタン枠を 46px 固定 */
-div[data-testid="stHorizontalBlock"]:has(iframe) > div:nth-child(1),
-div[data-testid="stHorizontalBlock"]:has(iframe) > div:nth-child(3) {
+/* ◀ と ▶ は 46px 固定 */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(1),
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(3) {
     flex: 0 0 46px !important;
     width: 46px !important;
     min-width: 46px !important;
 }
 
-/* 中央のセレクト枠 */
-div[data-testid="stHorizontalBlock"]:has(iframe) > div:nth-child(2) {
+/* 中央のセレクトボックス幅 */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(2) {
     flex: 1 1 auto !important;
     min-width: 0 !important;
 }
 
-/* ナビゲーションボタンの高さ */
-div[data-testid="stHorizontalBlock"]:has(iframe) button {
+/* ボタンのスタイル */
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
     height: 40px !important;
     padding: 0 !important;
     font-size: 16px !important;
@@ -500,62 +488,33 @@ div[data-testid="stHorizontalBlock"]:has(iframe) button {
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# ナビゲーションUI（ネイティブセレクト組み込み）
+# ナビゲーションUI（Streamlit標準の確実な双方向同期）
 # ----------------------------------------------------
 cur_scene = scene_list[st.session_state.cur_scene_idx]
 
-options_html = "".join([
-    f'<option value="{s}" {"selected" if s == cur_scene else ""}>Sc.{s} {scene_display_labels.get(s, "")}</option>'
-    for s in scene_list
-])
-
-native_select_html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-body {{
-    margin: 0;
-    padding: 0;
-    background: transparent;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}}
-select {{
-    width: 100%;
-    height: 40px;
-    background-color: #f8fafc;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    padding: 0 8px;
-    font-size: 14px;
-    font-weight: 500;
-    color: #1e293b;
-    outline: none;
-    cursor: pointer;
-    box-sizing: border-box;
-}}
-select:hover {{
-    border-color: #94a3b8;
-}}
-</style>
-</head>
-<body>
-<select onchange="window.parent.location.search = '?sel_scene=' + this.value;">
-{options_html}
-</select>
-</body>
-</html>
-"""
+def on_select_change():
+    chosen = st.session_state["nav_select_box"]
+    if chosen in scene_list:
+        st.session_state.cur_scene_idx = scene_list.index(chosen)
 
 col_prev, col_sel, col_next = st.columns([1, 4, 1], gap="small")
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_scene, use_container_width=True)
 with col_sel:
-    components.html(native_select_html, height=42)
+    # 選択時にPythonのStateが確実に更新されて再描画される
+    st.selectbox(
+        "Scene",
+        options=scene_list,
+        index=st.session_state.cur_scene_idx,
+        format_func=lambda s: scene_display_labels.get(s, f"Sc.{s}"),
+        key="nav_select_box",
+        on_change=on_select_change,
+        label_visibility="collapsed"
+    )
 with col_next:
     st.button("▶", key="main_next", on_click=go_next_scene, use_container_width=True)
 
-selected_scene = cur_scene
+selected_scene = scene_list[st.session_state.cur_scene_idx]
 s_info = full_meta_df[full_meta_df['Scene'] == selected_scene].iloc[0]
 s_shots = shots_dict.get(selected_scene, pd.DataFrame())
 
