@@ -123,7 +123,7 @@ PT_MAP = {0: "0", 1: "15", 2: "30", 3: "40"}
 def process_and_cache_dataset(shots, points, focus_player):
     dataset = []
 
-    # A. Pointsシートがありデータ行も入っている場合
+    # A. Pointsシートがある場合
     if not points.empty and len(points) > 0 and 'Video Time' in points.columns:
         scene_counter = 1
         for idx, pt_row in points.iterrows():
@@ -373,11 +373,9 @@ filter_sig = f"{sel_outcome}_{chosen_finish}"
 if "last_filter_sig" not in st.session_state or st.session_state.last_filter_sig != filter_sig:
     st.session_state.last_filter_sig = filter_sig
     st.session_state.cur_scene_idx = 0
-    st.session_state.main_scene_select = scene_list[0]
 
 if "cur_scene_idx" not in st.session_state or st.session_state.cur_scene_idx >= len(scene_list):
     st.session_state.cur_scene_idx = 0
-    st.session_state.main_scene_select = scene_list[0]
 
 st.sidebar.markdown("---")
 st.sidebar.header("📥 データ出力")
@@ -395,25 +393,40 @@ st.sidebar.header("🎨 表示設定")
 view_mode = st.sidebar.radio("描画モード", ["全ラリー表示", "決着ラスト2打のみ表示"], index=0)
 
 # ----------------------------------------------------
-# ナビゲーションの移動関数（セレクトボックスと完全同期）
+# ナビゲーションの移動関数
 # ----------------------------------------------------
 def go_prev_scene():
     if st.session_state.cur_scene_idx > 0:
         st.session_state.cur_scene_idx -= 1
-        st.session_state.main_scene_select = scene_list[st.session_state.cur_scene_idx]
 
 def go_next_scene():
     if st.session_state.cur_scene_idx < len(scene_list) - 1:
         st.session_state.cur_scene_idx += 1
-        st.session_state.main_scene_select = scene_list[st.session_state.cur_scene_idx]
-
-def on_main_select():
-    chosen = st.session_state.main_scene_select
-    if chosen in scene_list:
-        st.session_state.cur_scene_idx = scene_list.index(chosen)
 
 # ----------------------------------------------------
-# CSS: 1行横並び固定 ＆ スコア表示幅（230px）＆ スマホ時コート縮小
+# スコアを短縮する関数（各Sceneを一意に識別する辞書を事前生成）
+# ----------------------------------------------------
+scene_display_labels = {}
+for s_id in scene_list:
+    row = full_meta_df[full_meta_df['Scene'] == s_id]
+    if row.empty:
+        scene_display_labels[s_id] = f"Sc.{s_id}"
+        continue
+    raw_score = str(row.iloc[0]['Score'])
+    
+    m = re.search(r'Set\s*(\d+)\s*\|\s*Game\s*([0-9\-]+)\s*(\([^\)]+\)|\[[^\]]+\])', raw_score)
+    if m:
+        set_num = int(m.group(1))
+        game_part = m.group(2)
+        pt_part = m.group(3).replace('(', '').replace(')', '').replace('[', '').replace(']', '').replace('1st Fault', '').strip()
+        set_score_str = f"{set_num - 1}-0" if set_num > 1 else "0-0"
+        tag = " (1F)" if "1st Fault" in raw_score else ""
+        scene_display_labels[s_id] = f"{set_score_str} | {game_part} | {pt_part}{tag}"
+    else:
+        scene_display_labels[s_id] = raw_score
+
+# ----------------------------------------------------
+# CSS: 1行横並び固定 ＆ スコア表示幅（240px）＆ スマホ時コート縮小
 # ----------------------------------------------------
 st.markdown("""
 <style>
@@ -449,10 +462,10 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-
     width: 46px !important;
 }
 
-/* 4. 中央のセレクトボックス幅（スコア「1-0 | 1-0 | 0-30」が綺麗に収まる230px） */
+/* 4. 中央のセレクトボックス幅（240px） */
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > div:nth-child(2) {
     flex: 1 1 auto !important;
-    max-width: 230px !important;
+    max-width: 240px !important;
 }
 
 /* 5. ボタンのスタイル */
@@ -478,47 +491,28 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) button {
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# スコアを「1-0 | 1-0 | 0-30」形式に短縮変換する関数
+# ナビゲーションUI（現在位置追従・同期バグを完全解消）
 # ----------------------------------------------------
-def format_short_score(scene_id):
-    row = full_meta_df[full_meta_df['Scene'] == scene_id]
-    if row.empty:
-        return f"Scene {scene_id}"
-    raw_score = str(row.iloc[0]['Score'])
-    
-    m = re.search(r'Set\s*(\d+)\s*\|\s*Game\s*([0-9\-]+)\s*(\([^\)]+\)|\[[^\]]+\])', raw_score)
-    if m:
-        set_num = int(m.group(1))
-        game_part = m.group(2)
-        pt_part = m.group(3).replace('(', '').replace(')', '').replace('[', '').replace(']', '').replace('1st Fault', '').strip()
-        set_score_str = f"{set_num - 1}-0" if set_num > 1 else "0-0"
-        return f"{set_score_str} | {game_part} | {pt_part}"
-    
-    return raw_score
-
-# ----------------------------------------------------
-# ナビゲーションUI（現在位置と完全同期）
-# ----------------------------------------------------
-if "main_scene_select" not in st.session_state or st.session_state.main_scene_select not in scene_list:
-    st.session_state.main_scene_select = scene_list[st.session_state.cur_scene_idx]
-
 col_prev, col_sel, col_next = st.columns([1, 2, 1], gap="small")
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_scene, use_container_width=True)
 with col_sel:
-    st.selectbox(
+    # keyを排して戻り値を直接受け取ることで、常に正確な現在のインデックスに同期
+    selected_scene = st.selectbox(
         "Scene",
         options=scene_list,
         index=st.session_state.cur_scene_idx,
-        format_func=format_short_score,
-        key="main_scene_select",
-        on_change=on_main_select,
+        format_func=lambda s: scene_display_labels.get(s, f"Sc.{s}"),
         label_visibility="collapsed"
     )
+    # プルダウンから選ばれた場合はインデックスを更新
+    if selected_scene != scene_list[st.session_state.cur_scene_idx]:
+        st.session_state.cur_scene_idx = scene_list.index(selected_scene)
+        st.rerun()
+
 with col_next:
     st.button("▶", key="main_next", on_click=go_next_scene, use_container_width=True)
 
-selected_scene = scene_list[st.session_state.cur_scene_idx]
 s_info = full_meta_df[full_meta_df['Scene'] == selected_scene].iloc[0]
 s_shots = shots_dict.get(selected_scene, pd.DataFrame())
 
