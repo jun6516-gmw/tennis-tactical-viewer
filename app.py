@@ -465,9 +465,17 @@ col_court, col_info = st.columns([1.1, 1.0])
 with col_court:
     NET_Y = 11.885
     focal_shots = s_shots[s_shots['Player'] == target_player]
+    opp_shots = s_shots[s_shots['Player'] != target_player]
+    
     is_far = False
-    if not focal_shots.empty and focal_shots['Hit (y)'].mean() > NET_Y:
-        is_far = True
+    if not focal_shots.empty:
+        # 川端選手の打球がある場合：川端選手が奥側(Y > NET_Y)にいれば反転
+        if focal_shots['Hit (y)'].mean() > NET_Y:
+            is_far = True
+    elif not opp_shots.empty:
+        # 川端選手の打球がない場合（相手の1stフォールト等）：相手が手前側(Y < NET_Y)にいれば川端選手は奥にいるので反転
+        if opp_shots['Hit (y)'].mean() < NET_Y:
+            is_far = True
 
     records = []
     for idx, row in s_shots.iterrows():
