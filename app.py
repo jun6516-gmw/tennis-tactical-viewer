@@ -373,9 +373,11 @@ filter_sig = f"{sel_outcome}_{chosen_finish}"
 if "last_filter_sig" not in st.session_state or st.session_state.last_filter_sig != filter_sig:
     st.session_state.last_filter_sig = filter_sig
     st.session_state.cur_scene_idx = 0
+    st.session_state.main_scene_select = scene_list[0]
 
 if "cur_scene_idx" not in st.session_state or st.session_state.cur_scene_idx >= len(scene_list):
     st.session_state.cur_scene_idx = 0
+    st.session_state.main_scene_select = scene_list[0]
 
 st.sidebar.markdown("---")
 st.sidebar.header("📥 データ出力")
@@ -392,9 +394,9 @@ st.sidebar.markdown("---")
 st.sidebar.header("🎨 表示設定")
 view_mode = st.sidebar.radio("描画モード", ["全ラリー表示", "決着ラスト2打のみ表示"], index=0)
 
-if "main_scene_select" not in st.session_state or st.session_state.main_scene_select not in scene_list:
-    st.session_state.main_scene_select = scene_list[st.session_state.cur_scene_idx]
-
+# ----------------------------------------------------
+# ナビゲーションの移動関数（セレクトボックスと完全同期）
+# ----------------------------------------------------
 def go_prev_scene():
     if st.session_state.cur_scene_idx > 0:
         st.session_state.cur_scene_idx -= 1
@@ -484,22 +486,22 @@ def format_short_score(scene_id):
         return f"Scene {scene_id}"
     raw_score = str(row.iloc[0]['Score'])
     
-    # "Set X | Game A-B (C-D)" または "[TB C-D]" などを抽出
     m = re.search(r'Set\s*(\d+)\s*\|\s*Game\s*([0-9\-]+)\s*(\([^\)]+\)|\[[^\]]+\])', raw_score)
     if m:
         set_num = int(m.group(1))
         game_part = m.group(2)
         pt_part = m.group(3).replace('(', '').replace(')', '').replace('[', '').replace(']', '').replace('1st Fault', '').strip()
-        
-        # セットスコア（Set 1: 0-0, Set 2: 1-0 など）
         set_score_str = f"{set_num - 1}-0" if set_num > 1 else "0-0"
         return f"{set_score_str} | {game_part} | {pt_part}"
     
     return raw_score
 
 # ----------------------------------------------------
-# ナビゲーションUI（短縮スコア表示）
+# ナビゲーションUI（現在位置と完全同期）
 # ----------------------------------------------------
+if "main_scene_select" not in st.session_state or st.session_state.main_scene_select not in scene_list:
+    st.session_state.main_scene_select = scene_list[st.session_state.cur_scene_idx]
+
 col_prev, col_sel, col_next = st.columns([1, 2, 1], gap="small")
 with col_prev:
     st.button("◀", key="main_prev", on_click=go_prev_scene, use_container_width=True)
@@ -530,7 +532,6 @@ with col_court:
     focal_shots = s_shots[s_shots['Player'] == target_player]
     opp_shots = s_shots[s_shots['Player'] != target_player]
     
-    # 手前・奥の判定（相手のみのフォールト時も正確に判定）
     is_far = False
     if not focal_shots.empty:
         if focal_shots['Hit (y)'].mean() > NET_Y:
