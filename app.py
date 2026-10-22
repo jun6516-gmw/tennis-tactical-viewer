@@ -457,4 +457,100 @@ with col_court:
     ax.plot([0, 0], [0, 0.4], color='#cbd5e1', linewidth=1.5)
     ax.plot([0, 0], [23.37, 23.77], color='#cbd5e1', linewidth=1.5)
 
-    color_focal = '#38bdf8
+    color_focal = '#38bdf8'
+    color_opp = '#fb923c'
+    color_net_miss = '#ef4444'
+
+    for i, cur in enumerate(records):
+        c = color_focal if cur['player'] == target_player else color_opp
+        is_net = (cur['result'] == 'NET')
+        target_x, target_y = cur['bx'], cur['by']
+        annotation_c = c
+        speed_color = get_speed_color(cur.get('speed', 0))
+
+        if is_net:
+            hx, hy = cur['hx'], cur['hy']
+            bx, by = cur['bx'], cur['by']
+            target_y = NET_Y
+            if hy != by:
+                target_x = hx + (bx - hx) * (NET_Y - hy) / (by - hy)
+            annotation_c = color_net_miss
+
+        ls_arrow = '-' if (cur['result'] == 'IN' or is_net) else '--'
+        ax.annotate(
+            '', xy=(target_x, target_y), xytext=(cur['hx'], cur['hy']),
+            arrowprops=dict(arrowstyle="->,head_width=0.35,head_length=0.5",
+                            color=speed_color, lw=2.5, alpha=0.95, linestyle=ls_arrow)
+        )
+
+        if cur['shot'] == 1:
+            ax.plot(cur['hx'], cur['hy'], marker='o', markersize=13, color='#eab308', markeredgecolor='#ffffff', markeredgewidth=2, zorder=5)
+            ax.plot(cur['hx'], cur['hy'], marker='o', markersize=7, color=c, zorder=6)
+            ax.text(cur['hx'], cur['hy'] - 0.7 if cur['hy'] < NET_Y else cur['hy'] + 0.7,
+                    '★SERVE', color='#fde047', fontsize=8, fontweight='bold', ha='center', va='center',
+                    bbox=dict(boxstyle='round,pad=0.2', facecolor='#000000', edgecolor='#fde047', alpha=0.85))
+        else:
+            ax.plot(cur['hx'], cur['hy'], marker='o', markersize=7, color=c, markeredgecolor='#ffffff', markeredgewidth=1, zorder=4)
+
+        if is_net:
+            ax.plot(target_x, target_y, marker='X', markersize=16, color=color_net_miss, markeredgecolor='#ffffff', markeredgewidth=2, zorder=11)
+        else:
+            b_marker = '*' if cur['result'] == 'IN' else 'x'
+            ax.plot(target_x, target_y, marker=b_marker, markersize=11, color=annotation_c, markeredgecolor='#ffffff', markeredgewidth=1.5, zorder=4)
+
+        if i + 1 < len(records) and not is_net:
+            nxt = records[i+1]
+            ax.annotate(
+                '', xy=(nxt['hx'], nxt['hy']), xytext=(cur['bx'], cur['by']),
+                arrowprops=dict(arrowstyle="->,head_width=0.25,head_length=0.4",
+                                color=c, lw=1.5, alpha=0.6, linestyle=':')
+            )
+
+        offset_y = 0.55 if cur['hy'] < target_y else -0.55
+        label_c = annotation_c if is_net else '#ffffff'
+        bbox_c = color_net_miss if is_net else '#1e293b'
+
+        player_tag = "Me" if cur['player'] == target_player else "Opponent"
+        label_text = f"#{cur['shot']} {player_tag}\n{cur['stroke']} ({cur['speed']:.0f}km/h)"
+        if is_net:
+            label_text += "\n[NET]"
+        elif cur['result'] == 'OUT':
+            label_text += "\n[OUT]"
+
+        ax.text(target_x, target_y + offset_y, label_text, color=label_c, fontsize=7.5,
+                ha='center', va='center', zorder=7,
+                bbox=dict(boxstyle='round,pad=0.25', facecolor='#0f172a', edgecolor=bbox_c, alpha=0.9))
+
+    near_label = f"NEAR: {target_player}"
+    ax.text(0, -2.0, near_label, color='#38bdf8', fontsize=11, fontweight='bold', ha='center', fontfamily=selected_font)
+    ax.text(0, 25.2, "FAR: OPPONENT", color='#fb923c', fontsize=11, fontweight='bold', ha='center')
+
+    ax.set_xlim(-6.8, 6.8)
+    ax.set_ylim(-3.5, 27.2)
+    ax.set_aspect('equal', adjustable='box')
+    ax.axis('off')
+
+    st.pyplot(fig, use_container_width=True)
+
+# ====================================================
+# 【右側】概要 ＆ ショット詳細（スコア主役・不要な番号削除）
+# ====================================================
+with col_info:
+    st.write(f"**🎾 スコア:** {s_info['Score']}")
+    st.write(f"**📌 概要**")
+    st.write(f"**勝敗:** {s_info['Point_Outcome']}")
+    st.write(f"**ラリー打数:** {s_info['Total_Shots']} 打 ｜ **決まり方:** {s_info['Finish_Type']}")
+    st.write(f"**決着展開:** {s_info['Detail']}")
+
+    st.write("---")
+    st.write("**ショット詳細**")
+    if not s_shots.empty:
+        display_df = s_shots.copy()
+        display_df['Stroke'] = display_df['Stroke'].apply(translate_stroke)
+        display_df['Result'] = display_df['Result'].apply(translate_result)
+        display_df['Shot_No'] = display_df.get('Shot_Display', display_df['Shot'])
+
+        cols_to_show = ['Shot_No', 'Player', 'Stroke', 'Speed (KM/H)', 'Direction', 'Result']
+        st.dataframe(display_df[[c for c in cols_to_show if c in display_df.columns]], use_container_width=True, hide_index=True)
+    else:
+        st.info("このシーンに対応するショット詳細がありません。")
