@@ -80,6 +80,7 @@ if uploaded_file is None:
 def load_raw_data(file_bytes, file_name):
     shots = pd.DataFrame()
     points = pd.DataFrame()
+    host_name, guest_name = None, None
 
     if file_name.endswith(".xlsx"):
         xls = pd.ExcelFile(io.BytesIO(file_bytes))
@@ -87,17 +88,25 @@ def load_raw_data(file_bytes, file_name):
             shots = pd.read_excel(xls, sheet_name="Shots")
         else:
             shots = pd.read_excel(xls, sheet_name=0)
-            
+
         if "Points" in xls.sheet_names:
             points = pd.read_excel(xls, sheet_name="Points")
+            points = points.dropna(subset=["Point"]) if "Point" in points.columns else pd.DataFrame()
+
+        # Points の Point Winner / Match Server は 'host' / 'guest' なので、選手名に直すために読む
+        if "Settings" in xls.sheet_names:
+            settings = pd.read_excel(xls, sheet_name="Settings")
+            if {"Host Team", "Guest Team"} <= set(settings.columns) and len(settings) > 0:
+                host_name = str(settings.loc[0, "Host Team"])
+                guest_name = str(settings.loc[0, "Guest Team"])
     else:
         shots = pd.read_csv(io.BytesIO(file_bytes))
 
-    return shots, points
+    return shots, points, host_name, guest_name
 
 raw_bytes = uploaded_file.getvalue()
 try:
-    shots_raw, points_raw = load_raw_data(raw_bytes, uploaded_file.name)
+    shots_raw, points_raw, host_name, guest_name = load_raw_data(raw_bytes, uploaded_file.name)
 except Exception as e:
     st.error(f"ファイルの読み込みに失敗しました: {e}")
     st.stop()
@@ -119,24 +128,79 @@ target_player = st.sidebar.selectbox("手前側に固定するプレイヤーを
 # ----------------------------------------------------
 PT_MAP = {0: "0", 1: "15", 2: "30", 3: "40"}
 
+SERVE_TYPES = ('first_serve', 'second_serve')
+
+def shots_of_point(shots, pt_row):
+    """Points の1行に属するショットを返す。
+    - Points再構成ツールの出力: Shots の「再構成Point」列で対応づける
+    - SwingVision の元データ: Shots の Point 列 = Points の Point
+    - どちらも無いとき: 時間で切り出す。SwingVision の Video Time は「最初のサーブの約2秒後」、
+      Video Time + Duration は「最後の打球の約3秒後」なので、その区間を少し広げて使う。
+    """
+    pid = int(pt_row['Point'])
+    if '再構成Point' in shots.columns:
+        sub = shots[shots['再構成Point'] == pid]
+    elif 'Point' in shots.columns:
+        sub = shots[shots['Point'] == pid]
+    else:
+        sub = shots.iloc[0:0]
+    if sub.empty:
+        vt = float(pt_row['Video Time'])
+        dur = float(pt_row.get('Duration', 0.0) or 0.0)
+        sub = shots[(shots['Video Time'] >= vt - 2.5) & (shots['Video Time'] <= vt + max(dur, 3.0) + 0.5)]
+    sub = sub.sort_values('Video Time')
+    # 実際にプレーされたラリー = 最後のサーブ以降（フォルトやレットのサーブ・ラリーは描画しない）
+    is_serve = sub['Type'].isin(SERVE_TYPES).to_numpy()
+    if is_serve.any():
+        last_serve = np.where(is_serve)[0][-1]
+        sub = sub.iloc[last_serve:]
+    if 'Stroke' in sub.columns:
+        sub = sub[sub['Stroke'] != 'フィード']
+    return sub.copy()
+
+def finish_of_rally(sub, focus_player):
+    """ラリーの最後の打球から決まり方を判定する"""
+    if sub.empty:
+        return "その他"
+    last = sub.iloc[-1]
+    res = str(last['Result'])
+    if len(sub) == 1 and str(last.get('Type', '')) == 'second_serve' and res in ('ネット', 'アウト'):
+        return "ダブルフォルト"
+    if len(sub) == 1 and res == 'イン':
+        return "エース"
+    if res == 'アウト':
+        return "アウト"
+    if res == 'ネット':
+        return "ネット"
+    return "ウィナー"
+
+def winner_from_rally(sub, player_names):
+    """打球の記録だけから見たポイントの勝者（選手名）。判定できなければ None。
+    最後の打球がネット/アウトなら打った人の失点、インなら打った人の得点。"""
+    if sub.empty or len(player_names) != 2:
+        return None
+    last = sub.iloc[-1]
+    hitter = str(last['Player'])
+    if hitter not in player_names:
+        return None
+    other = player_names[1] if hitter == player_names[0] else player_names[0]
+    return other if str(last['Result']) in ('ネット', 'アウト') else hitter
+
 @st.cache_data
-def process_and_cache_dataset(shots, points, focus_player):
+def process_and_cache_dataset(shots, points, focus_player, host_name=None, guest_name=None):
     dataset = []
+    side_name = {'host': host_name, 'guest': guest_name}
+    if host_name and guest_name:
+        player_names = [host_name, guest_name]
+    else:
+        player_names = [p for p in shots['Player'].dropna().astype(str).unique().tolist() if p.strip()][:2]
 
     # A. Pointsシートがある場合
     if not points.empty and len(points) > 0 and 'Video Time' in points.columns:
         scene_counter = 1
         for idx, pt_row in points.iterrows():
             orig_p_id = int(pt_row['Point'])
-            end_t = float(pt_row['Video Time'])
-            dur = float(pt_row.get('Duration', 0.0))
-            start_t = max(0.0, end_t - dur - 1.2) if dur > 0 else max(0.0, end_t - 8.0)
-
-            sub_shots = shots[(shots['Video Time'] >= start_t) & (shots['Video Time'] <= end_t + 1.2)].copy()
-            if sub_shots.empty:
-                sub_shots = shots[shots['Point'] == orig_p_id].copy()
-
-            sub_shots = sub_shots.sort_values('Video Time')
+            sub_shots = shots_of_point(shots, pt_row)
             sub_shots['Shot_Display'] = range(1, len(sub_shots) + 1)
 
             h_score = str(pt_row.get('Host Game Score', '0'))
@@ -145,29 +209,22 @@ def process_and_cache_dataset(shots, points, focus_player):
             set_num = pt_row.get('Set', 1)
             score_str = f"Set {set_num} | Game {game_num} ({h_score}-{g_score})"
 
-            winner = str(pt_row.get('Point Winner', ''))
-            detail = str(pt_row.get('Detail', ''))
+            # Point Winner は 'host' / 'guest'。Settings の選手名に直してから比べる
+            winner_raw = str(pt_row.get('Point Winner', ''))
+            winner = side_name.get(winner_raw) or winner_raw
+            detail = pt_row.get('Detail', '')
+            detail = '' if pd.isna(detail) else str(detail)
 
-            is_1st_fault = False
-            if len(sub_shots) == 1:
-                first_s = sub_shots.iloc[0]
-                if 'first_serve' in str(first_s.get('Type', '')) and first_s['Result'] in ['ネット', 'アウト']:
-                    is_1st_fault = True
+            point_outcome = "取った" if winner == focus_player else "落とした"
+            finish_type = finish_of_rally(sub_shots, focus_player)
 
-            if is_1st_fault:
-                point_outcome = "-"
-                finish_type = "1st Fault"
-            else:
-                point_outcome = "取った" if winner == focus_player else "落とした"
-                finish_type = "その他"
-                if "アウト" in detail or "out" in detail.lower():
-                    finish_type = "アウト"
-                elif "ネット" in detail or "net" in detail.lower():
-                    finish_type = "ネット"
-                elif "エース" in detail or "ace" in detail.lower():
-                    finish_type = "エース"
-                elif "ウィナー" in detail or "winner" in detail.lower():
-                    finish_type = "ウィナー"
+            # Points の勝者と、打球の記録から見た勝者が食い違うシーンは「判定不一致」として分けて表示する
+            # （打球の見逃しやイン/アウトの判定違いが多い。動画で確認する候補）
+            shot_winner = winner_from_rally(sub_shots, player_names)
+            mismatch = shot_winner is not None and winner in player_names and shot_winner != winner
+            shot_finish = finish_type
+            if mismatch:
+                finish_type = "判定不一致"
 
             dataset.append({
                 'Scene': scene_counter,
@@ -177,6 +234,9 @@ def process_and_cache_dataset(shots, points, focus_player):
                 'Finish_Type': finish_type,
                 'Total_Shots': len(sub_shots),
                 'Detail': detail if detail else f"Winner: {winner}",
+                'Mismatch': bool(mismatch),
+                'Mismatch_Note': (f"Pointsの勝者は「{winner}」ですが、打球の記録では最後が"
+                                  f"「{shot_finish}」で「{shot_winner}」の得点になります。") if mismatch else "",
                 'Shots_DF': sub_shots
             })
             scene_counter += 1
@@ -320,7 +380,7 @@ def process_and_cache_dataset(shots, points, focus_player):
 
 # 前処理の実行
 with st.spinner("試合データを解析・最適化中..."):
-    match_scenes = process_and_cache_dataset(shots_raw, points_raw, target_player)
+    match_scenes = process_and_cache_dataset(shots_raw, points_raw, target_player, host_name, guest_name)
 
 if not match_scenes:
     st.error("有効なシーンデータが見つかりませんでした。")
@@ -499,7 +559,7 @@ def on_select_change():
 
 col_prev, col_sel, col_next = st.columns([1, 4, 1], gap="small")
 with col_prev:
-    st.button("◀", key="main_prev", on_click=go_prev_scene, use_container_width=True)
+    st.button("◀", key="main_prev", on_click=go_prev_scene, width="stretch")
 with col_sel:
     # 選択時にPythonのStateが確実に更新されて再描画される
     st.selectbox(
@@ -512,7 +572,7 @@ with col_sel:
         label_visibility="collapsed"
     )
 with col_next:
-    st.button("▶", key="main_next", on_click=go_next_scene, use_container_width=True)
+    st.button("▶", key="main_next", on_click=go_next_scene, width="stretch")
 
 selected_scene = scene_list[st.session_state.cur_scene_idx]
 s_info = full_meta_df[full_meta_df['Scene'] == selected_scene].iloc[0]
@@ -648,7 +708,7 @@ with col_court:
     ax.set_aspect('equal', adjustable='box')
     ax.axis('off')
 
-    st.pyplot(fig, use_container_width=True)
+    st.pyplot(fig, width="stretch")
 
 # ====================================================
 # 【右側】概要 ＆ ショット詳細
@@ -659,6 +719,9 @@ with col_info:
     st.write(f"**勝敗:** {s_info['Point_Outcome']}")
     st.write(f"**ラリー打数:** {s_info['Total_Shots']} 打 ｜ **決まり方:** {s_info['Finish_Type']}")
     st.write(f"**決着展開:** {s_info['Detail']}")
+    if bool(s_info.get('Mismatch', False)):
+        st.warning(f"⚠️ 判定不一致：{s_info.get('Mismatch_Note', '')}"
+                   "打球の見逃しやイン/アウトの判定違いの可能性があります。動画で確認してください。")
 
     st.write("---")
     st.write("**ショット詳細**")
@@ -669,6 +732,6 @@ with col_info:
         display_df['Shot_No'] = display_df.get('Shot_Display', display_df['Shot'])
 
         cols_to_show = ['Shot_No', 'Player', 'Stroke', 'Speed (KM/H)', 'Direction', 'Result']
-        st.dataframe(display_df[[c for c in cols_to_show if c in display_df.columns]], use_container_width=True, hide_index=True)
+        st.dataframe(display_df[[c for c in cols_to_show if c in display_df.columns]], width="stretch", hide_index=True)
     else:
         st.info("このシーンに対応するショット詳細がありません。")
